@@ -135,6 +135,41 @@ REM or
 set ALL_PROXY=socks5://127.0.0.1:1080
 ```
 
+#### Proxy with username + password (simple guide)
+
+1) Take your proxy host and port (example: `1.2.3.4:8080`).
+
+2) Add your login and password in the URL:
+
+- HTTP/HTTPS proxy:
+  - `http://USERNAME:PASSWORD@HOST:PORT`
+- SOCKS5 proxy:
+  - `socks5://USERNAME:PASSWORD@HOST:PORT`
+
+3) Set it in the terminal and run the bot.
+
+PowerShell:
+
+```powershell
+$env:HTTPS_PROXY = "http://USERNAME:PASSWORD@HOST:PORT"
+npm start
+```
+
+CMD:
+
+```cmd
+set HTTPS_PROXY=http://USERNAME:PASSWORD@HOST:PORT
+npm start
+```
+
+Important: if your password contains special characters like `@` or `:` you must URL-encode it.
+
+Example:
+
+- password: `p@ss:word`
+- encoded: `p%40ss%3Aword`
+- proxy URL: `http://user:p%40ss%3Aword@1.2.3.4:8080`
+
 ## Run
 
 ```bash
