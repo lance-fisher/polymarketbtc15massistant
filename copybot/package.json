@@ -1,0 +1,13 @@
+{
+  "name": "polymarket-copybot",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "approve": "node src/approve.js"
+  },
+  "dependencies": {
+    "ethers": "^6.11.1"
+  }
+}
