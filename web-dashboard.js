@@ -25,23 +25,60 @@ const LOGS = {
 };
 
 // ── Chain ──
-const RPC = "https://polygon-bor-rpc.publicnode.com";
-const USDC = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+const RPC_URLS = [
+  "https://polygon-bor-rpc.publicnode.com",
+  "https://polygon.llamarpc.com",
+  "https://polygon-mainnet.public.blastapi.io",
+  "https://1rpc.io/matic",
+];
+// USDC.e (bridged, used by Polymarket) + native USDC
+const USDC_BRIDGED = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+const USDC_NATIVE  = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
 const WALLETS = [
   { id: "signal", label: "Signal Bot (BTC 15m)", addr: "0x5eD48e29dcd952955d7E4fccC3616EFA38cD75a5" },
   { id: "copy",   label: "Copy Bot (@anoin123)",  addr: "0xf35803f093BBceaBEb9A6abd3d4c99856BDdA40C" },
   { id: "auto",   label: "Auto Bot (Own Path)",   addr: "0xf17Cb352380Fd5503742c5A0573cDE4c656d8486" },
 ];
 
-let provider, usdcContract;
-function getUsdc() {
-  if (!provider) provider = new ethers.JsonRpcProvider(RPC, 137, { staticNetwork: true });
-  if (!usdcContract) usdcContract = new ethers.Contract(USDC, ["function balanceOf(address) view returns (uint256)"], provider);
-  return usdcContract;
+const ABI = ["function balanceOf(address) view returns (uint256)"];
+let provider, usdcBridged, usdcNative, rpcIndex = 0;
+
+function getProvider() {
+  if (!provider) {
+    provider = new ethers.JsonRpcProvider(RPC_URLS[rpcIndex], 137, { staticNetwork: true });
+  }
+  return provider;
+}
+
+function rotateRpc() {
+  rpcIndex = (rpcIndex + 1) % RPC_URLS.length;
+  provider = new ethers.JsonRpcProvider(RPC_URLS[rpcIndex], 137, { staticNetwork: true });
+  usdcBridged = new ethers.Contract(USDC_BRIDGED, ABI, provider);
+  usdcNative  = new ethers.Contract(USDC_NATIVE, ABI, provider);
+  console.log(`  [rpc] Switched to ${RPC_URLS[rpcIndex]}`);
+}
+
+function getContracts() {
+  const p = getProvider();
+  if (!usdcBridged) usdcBridged = new ethers.Contract(USDC_BRIDGED, ABI, p);
+  if (!usdcNative)  usdcNative  = new ethers.Contract(USDC_NATIVE, ABI, p);
+  return { usdcBridged, usdcNative };
 }
 
 async function fetchBal(addr) {
-  try { return Number(await getUsdc().balanceOf(addr)) / 1e6; } catch { return null; }
+  for (let attempt = 0; attempt < RPC_URLS.length; attempt++) {
+    try {
+      const { usdcBridged: ub, usdcNative: un } = getContracts();
+      const [bridged, native] = await Promise.all([
+        ub.balanceOf(addr),
+        un.balanceOf(addr),
+      ]);
+      return (Number(bridged) + Number(native)) / 1e6;
+    } catch {
+      rotateRpc();
+    }
+  }
+  return null;
 }
 
 function loadJson(fp) {
