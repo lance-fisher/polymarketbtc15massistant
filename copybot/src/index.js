@@ -3,10 +3,13 @@
  * Polymarket Copy-Trading Bot
  * Mirrors positions of a target trader and texts you on profit.
  *
- * Usage:
- *   1. cp .env.example .env   (fill in values)
- *   2. npm run approve         (one-time on-chain approvals)
- *   3. npm start               (run the bot)
+ * Safeguards:
+ *   - Portfolio cap (MAX_PORTFOLIO_USDC) — stops buying when exposure limit hit
+ *   - Position cap (MAX_POSITIONS) — max concurrent positions
+ *   - Daily spending cap (MAX_DAILY_USDC) — resets at midnight ET
+ *   - Max 2 new entries per poll cycle — prevents first-run dump
+ *   - Spread guard — skips markets with bid/ask spread > MAX_SPREAD_CENTS
+ *   - First-run catch-up skip — ignores target's pre-existing positions on launch
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { ethers } from "ethers";
@@ -24,15 +27,16 @@ function loadState() {
   if (existsSync(STATE_FILE)) {
     try { return JSON.parse(readFileSync(STATE_FILE, "utf8")); } catch { /* ignore */ }
   }
-  return { copied: {}, pnl: [] };
-  // copied:  { conditionId: { tokenId, side, outcome, title, costUsdc, shares, entryPrice, ts } }
-  // pnl:     [ { title, outcome, profit, ts } ]
+  return { copied: {}, pnl: [], dailySpent: 0, dailyResetDate: "" };
 }
 function saveState(s) { writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); }
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 
 function now() { return new Date().toLocaleString("en-US", { timeZone: "America/New_York" }); }
+function todayET() {
+  return new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+}
 
 function log(tag, msg) { console.log(`[${now()}] [${tag}] ${msg}`); }
 
@@ -43,8 +47,8 @@ function diffPositions(targetPositions, copiedKeys) {
     targetMap.set(key, p);
   }
 
-  const toEnter = [];       // target has it, we don't
-  const toExit  = [];       // we have it, target doesn't
+  const toEnter = [];
+  const toExit  = [];
 
   for (const [key, pos] of targetMap) {
     if (!copiedKeys.has(key)) toEnter.push(pos);
@@ -63,10 +67,8 @@ async function main() {
 ║   Polymarket Copy Bot  ·  Target: @${CFG.targetUsername.padEnd(12)}   ║
 ╚══════════════════════════════════════════════════╝`);
 
-  // ── Validate config ──
   if (!CFG.privateKey) { console.error("PRIVATE_KEY is required. See .env.example"); process.exit(1); }
 
-  // ── Wallet setup ──
   const provider = new ethers.JsonRpcProvider(CFG.polygonRpc, 137, { staticNetwork: true });
   const wallet   = new ethers.Wallet(CFG.privateKey, provider);
   log("init", `Wallet: ${wallet.address}`);
@@ -112,15 +114,38 @@ async function main() {
   const copiedKeys = new Set(Object.keys(state.copied));
   let totalProfit = state.pnl.reduce((s, e) => s + e.profit, 0);
 
-  log("init", `Loaded ${copiedKeys.size} copied positions, cumulative P&L: $${totalProfit.toFixed(2)}`);
-  log("run", `Polling every ${CFG.pollIntervalS}s | Max per trade: $${CFG.maxTradeUsdc}`);
+  // ── First-run catch-up protection ──
+  // Snapshot the target's current positions so we don't blindly enter them all.
+  // We only copy NEW positions that appear AFTER the bot starts.
+  let baselineKeys = new Set();
+  if (copiedKeys.size === 0) {
+    try {
+      const existing = await fetchPositions(targetAddr);
+      for (const p of existing) {
+        baselineKeys.add(p.conditionId + "_" + p.asset);
+      }
+      log("init", `Baseline: ${baselineKeys.size} existing positions (will NOT auto-copy these)`);
+    } catch (e) {
+      log("warn", `Could not fetch baseline: ${e.message}`);
+    }
+  }
+
+  log("init", `Loaded ${copiedKeys.size} copied positions, P&L: $${totalProfit.toFixed(2)}`);
+  log("init", `Limits: $${CFG.maxTradeUsdc}/trade | $${CFG.maxPortfolioUsdc} portfolio cap | ${CFG.maxPositions} max positions | $${CFG.maxDailyUsdc}/day`);
   console.log("─".repeat(52));
 
-  // ── Poll loop ──
   let cycle = 0;
   while (true) {
     cycle++;
     try {
+      // ── Reset daily spending at midnight ET ──
+      const today = todayET();
+      if (state.dailyResetDate !== today) {
+        state.dailySpent = 0;
+        state.dailyResetDate = today;
+        saveState(state);
+      }
+
       // 1. Fetch target positions
       const targetPos = await fetchPositions(targetAddr);
       log("poll", `Target has ${targetPos.length} open positions`);
@@ -128,33 +153,75 @@ async function main() {
       // 2. Diff against our copies
       const { toEnter, toExit } = diffPositions(targetPos, copiedKeys);
 
-      // 3. Copy new entries
+      // 3. Compute current exposure
+      const currentExposure = Object.values(state.copied).reduce((s, e) => s + e.costUsdc, 0);
+      const currentPositions = Object.keys(state.copied).length;
+
+      // 4. Copy new entries (with all safeguards)
+      let newThisCycle = 0;
       for (const pos of toEnter) {
         const key = pos.conditionId + "_" + pos.asset;
         const title = pos.title || pos.slug || pos.conditionId.slice(0, 12);
         const outcome = pos.outcome || "?";
 
+        // ── Guard: first-run catch-up ──
+        if (baselineKeys.has(key)) {
+          log("skip", `${title} (${outcome}) – pre-existing position (catch-up protection)`);
+          continue;
+        }
+
+        // ── Guard: max new entries per cycle ──
+        if (newThisCycle >= CFG.maxNewPerCycle) {
+          log("skip", `${title} – max ${CFG.maxNewPerCycle} new entries per cycle reached`);
+          break;
+        }
+
+        // ── Guard: max positions ──
+        if (currentPositions + newThisCycle >= CFG.maxPositions) {
+          log("skip", `${title} – at position limit (${CFG.maxPositions})`);
+          break;
+        }
+
+        // ── Guard: portfolio cap ──
+        const spent = currentExposure + (newThisCycle * CFG.maxTradeUsdc);
+        if (spent + CFG.maxTradeUsdc > CFG.maxPortfolioUsdc) {
+          log("skip", `${title} – portfolio cap ($${CFG.maxPortfolioUsdc}) would be exceeded`);
+          break;
+        }
+
+        // ── Guard: daily spending cap ──
+        if (state.dailySpent + CFG.maxTradeUsdc > CFG.maxDailyUsdc) {
+          log("skip", `${title} – daily spending cap ($${CFG.maxDailyUsdc}) reached`);
+          break;
+        }
+
         // Lookup market for negRisk flag
         const mkt = await fetchMarketInfo(pos.conditionId);
         const negRisk = mkt?.negRisk ?? false;
 
-        // Get best price
-        const price = await getBookPrice(pos.asset, "BUY");
-        if (!price || price <= 0 || price >= 1) {
-          log("skip", `${title} (${outcome}) – no valid price`);
+        // ── Guard: spread check ──
+        const buyPrice = await getBookPrice(pos.asset, "BUY");
+        const sellPrice = await getBookPrice(pos.asset, "SELL");
+        if (!buyPrice || buyPrice <= 0 || buyPrice >= 1) {
+          log("skip", `${title} (${outcome}) – no valid buy price`);
+          continue;
+        }
+        const spreadCents = sellPrice ? Math.round((buyPrice - sellPrice) * 100) : 99;
+        if (spreadCents > CFG.maxSpreadCents) {
+          log("skip", `${title} (${outcome}) – spread too wide (${spreadCents}¢ > ${CFG.maxSpreadCents}¢)`);
           continue;
         }
 
-        const usdcToSpend = Math.min(CFG.maxTradeUsdc, 100);  // cap
-        const shares = usdcToSpend / price;
+        const usdcToSpend = CFG.maxTradeUsdc;
+        const shares = usdcToSpend / buyPrice;
 
-        log("copy", `BUY ${outcome} on "${title}" @ $${price.toFixed(2)} for $${usdcToSpend.toFixed(2)}`);
+        log("copy", `BUY ${outcome} on "${title}" @ ${(buyPrice * 100).toFixed(0)}¢ for $${usdcToSpend.toFixed(2)} (spread: ${spreadCents}¢)`);
 
         const result = await placeOrder({
           wallet, creds,
           side: "BUY",
           tokenId: pos.asset,
-          price,
+          price: buyPrice,
           amount: usdcToSpend,
           negRisk,
         });
@@ -167,20 +234,22 @@ async function main() {
             outcome, title,
             costUsdc: usdcToSpend,
             shares,
-            entryPrice: price,
+            entryPrice: buyPrice,
             negRisk,
             ts: Date.now(),
           };
           copiedKeys.add(key);
+          state.dailySpent += usdcToSpend;
+          newThisCycle++;
           saveState(state);
         } else {
           log("err", `Order failed: ${result.errorMsg || JSON.stringify(result)}`);
         }
 
-        await sleep(500);   // don't spam
+        await sleep(500);
       }
 
-      // 4. Exit positions target no longer holds
+      // 5. Exit positions target no longer holds
       for (const key of toExit) {
         const entry = state.copied[key];
         if (!entry) continue;
@@ -191,7 +260,7 @@ async function main() {
           continue;
         }
 
-        log("exit", `SELL ${entry.outcome} on "${entry.title}" @ $${price.toFixed(2)}`);
+        log("exit", `SELL ${entry.outcome} on "${entry.title}" @ ${(price * 100).toFixed(0)}¢`);
 
         const result = await placeOrder({
           wallet, creds,
@@ -216,7 +285,7 @@ async function main() {
 
         if (profit > 0) {
           await sendSms(
-            `💰 Polymarket profit!\n` +
+            `Polymarket profit!\n` +
             `Market: ${entry.title}\n` +
             `Outcome: ${entry.outcome}\n` +
             `Profit: ${profitStr}\n` +
@@ -227,7 +296,7 @@ async function main() {
         await sleep(500);
       }
 
-      // 5. Check current value of held positions for unrealized gains
+      // 6. Check current value of held positions
       for (const [key, entry] of Object.entries(state.copied)) {
         const price = await getBookPrice(entry.tokenId, "SELL").catch(() => null);
         if (!price) continue;
@@ -237,29 +306,31 @@ async function main() {
       }
       saveState(state);
 
-      // 6. Status display
+      // 7. Status display
       if (cycle % 2 === 0) {
         const held = Object.values(state.copied);
+        const exposure = held.reduce((s, e) => s + e.costUsdc, 0);
         const unrealTotal = held.reduce((s, e) => s + (e._unrealized || 0), 0);
         console.log("─".repeat(52));
-        log("status", `Positions: ${held.length} | Realized P&L: $${totalProfit.toFixed(2)} | Unrealized: $${unrealTotal.toFixed(2)}`);
+        log("status", `Positions: ${held.length}/${CFG.maxPositions} | Exposure: $${exposure.toFixed(2)}/$${CFG.maxPortfolioUsdc} | Today: $${state.dailySpent.toFixed(2)}/$${CFG.maxDailyUsdc}`);
+        log("status", `Realized: $${totalProfit.toFixed(2)} | Unrealized: $${unrealTotal.toFixed(2)}`);
         for (const e of held) {
           const u = (e._unrealized ?? 0);
           const tag = u >= 0 ? "+" : "";
-          console.log(`  • ${e.title} (${e.outcome}) @ $${e.entryPrice?.toFixed(2)} → $${(e._curPrice ?? 0).toFixed(2)}  ${tag}$${u.toFixed(2)}`);
+          console.log(`  * ${e.title} (${e.outcome}) @ ${(e.entryPrice * 100).toFixed(0)}c -> ${((e._curPrice ?? 0) * 100).toFixed(0)}c  ${tag}$${u.toFixed(2)}`);
         }
         console.log("─".repeat(52));
       }
 
     } catch (err) {
       log("err", err.message);
+      await sleep(5000);  // back off on errors
     }
 
     await sleep(CFG.pollIntervalS * 1000);
   }
 }
 
-// ── Graceful shutdown ──
 process.on("SIGINT", () => {
   console.log("\nShutting down…");
   process.exit(0);
