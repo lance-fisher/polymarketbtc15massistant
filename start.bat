@@ -40,6 +40,7 @@ if exist "D:\ProjectsHome" (
 if exist "%DIR%\.git" (
     echo   [ok] Repo at %DIR% - pulling latest...
     cd /d "%DIR%"
+    git checkout %BRANCH% 2>nul
     git pull origin %BRANCH% 2>nul
 ) else (
     echo   [clone] Cloning to %DIR% ...
@@ -119,18 +120,25 @@ echo   (needs MATIC/POL in each wallet for gas)
 echo.
 
 cd /d "%DIR%\copybot"
+for /f "usebackq tokens=1,2 delims==" %%a in (".env") do set "%%a=%%b"
 node src\approve.js 2>&1 || echo   Copy Bot approval skipped (need MATIC?)
 timeout /t 2 /nobreak >nul
 
 cd /d "%DIR%\autobot"
+for /f "usebackq tokens=1,2 delims==" %%a in (".env") do set "%%a=%%b"
 node src\approve.js 2>&1 || echo   Auto Bot approval skipped (need MATIC?)
 cd /d "%DIR%"
 
 :: ── Create logs dir ──
 if not exist "%DIR%\logs" mkdir "%DIR%\logs"
 
+:: Clear old logs for fresh start
+type nul > "%DIR%\logs\copybot.log" 2>nul
+type nul > "%DIR%\logs\signal.log" 2>nul
+type nul > "%DIR%\logs\autobot.log" 2>nul
+
 :: ═══════════════════════════════════════════════════════
-::  LAUNCH ALL 3 BOTS (background windows)
+::  LAUNCH ALL 3 BOTS (each via its own run.bat)
 :: ═══════════════════════════════════════════════════════
 echo.
 echo   ═══════════════════════════════════════════
@@ -138,16 +146,16 @@ echo     LAUNCHING ALL 3 BOTS + DASHBOARD
 echo   ═══════════════════════════════════════════
 echo.
 
-:: Bot 1: Copy Bot (minimized)
-start "CopyBot" /min cmd /c "cd /d "%DIR%\copybot" && node src\index.js >> "%DIR%\logs\copybot.log" 2>&1"
+:: Bot 1: Copy Bot (minimized, uses copybot\run.bat which loads .env)
+start "CopyBot" /min cmd /c ""%DIR%\copybot\run.bat" >> "%DIR%\logs\copybot.log" 2>&1"
 echo   [1/3] Copy Bot (@anoin123)     STARTED
 
-:: Bot 2: Signal Bot (minimized)
-start "SignalBot" /min cmd /c "cd /d "%DIR%" && node src\index.js >> "%DIR%\logs\signal.log" 2>&1"
+:: Bot 2: Signal Bot (minimized, uses run-signal.bat which loads .env)
+start "SignalBot" /min cmd /c ""%DIR%\run-signal.bat" >> "%DIR%\logs\signal.log" 2>&1"
 echo   [2/3] Signal Bot (BTC 15m)     STARTED
 
-:: Bot 3: Autonomous Bot (minimized)
-start "AutoBot" /min cmd /c "cd /d "%DIR%\autobot" && node src\index.js >> "%DIR%\logs\autobot.log" 2>&1"
+:: Bot 3: Autonomous Bot (minimized, uses autobot\run.bat which loads .env)
+start "AutoBot" /min cmd /c ""%DIR%\autobot\run.bat" >> "%DIR%\logs\autobot.log" 2>&1"
 echo   [3/3] Autonomous Bot           STARTED
 
 echo.
