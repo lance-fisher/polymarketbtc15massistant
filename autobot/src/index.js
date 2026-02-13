@@ -3,8 +3,14 @@
  * Polymarket Autonomous Trading Bot
  *
  * Scans all active markets, scores opportunities using a contrarian/value
- * strategy, and trades autonomously.  No copying, no single-market focus —
- * this bot chooses its own path.
+ * strategy, and trades autonomously.
+ *
+ * Safeguards:
+ *   - Portfolio cap (MAX_PORTFOLIO_USDC)
+ *   - Position cap (MAX_POSITIONS)
+ *   - Daily spending cap (MAX_DAILY_USDC) — resets at midnight ET
+ *   - Spread guard (MAX_SPREAD_CENTS)
+ *   - Max 2 new entries per scan cycle
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { ethers } from "ethers";
@@ -16,10 +22,13 @@ import { rankOpportunities } from "./strategy.js";
 const STATE_FILE = new URL("../../autobot-state.json", import.meta.url).pathname;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const ts = () => new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+function todayET() {
+  return new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+}
 
 function loadState() {
   if (existsSync(STATE_FILE)) { try { return JSON.parse(readFileSync(STATE_FILE, "utf8")); } catch {} }
-  return { positions: {}, history: [], totalInvested: 0, totalReturned: 0 };
+  return { positions: {}, history: [], totalInvested: 0, totalReturned: 0, dailySpent: 0, dailyResetDate: "" };
 }
 function saveState(s) { writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); }
 
@@ -59,13 +68,22 @@ async function main() {
   const state = loadState();
   const posCount = Object.keys(state.positions).length;
   console.log(`[init] ${posCount} active positions loaded`);
-  console.log(`[init] Scanning every ${CFG.scanIntervalS}s | Max $${CFG.maxTradeUsdc}/trade | Min edge ${(CFG.minEdge * 100).toFixed(0)}%`);
+  console.log(`[init] Limits: $${CFG.maxTradeUsdc}/trade | $${CFG.maxPortfolioUsdc} portfolio | ${CFG.maxPositions} positions | $${CFG.maxDailyUsdc}/day | ${CFG.maxSpreadCents}c max spread`);
+  console.log(`[init] Scanning every ${CFG.scanIntervalS}s | Min edge ${(CFG.minEdge * 100).toFixed(0)}%`);
   console.log("═".repeat(52));
 
   let cycle = 0;
   while (true) {
     cycle++;
     try {
+      // ── Reset daily spending at midnight ET ──
+      const today = todayET();
+      if (state.dailyResetDate !== today) {
+        state.dailySpent = 0;
+        state.dailyResetDate = today;
+        saveState(state);
+      }
+
       // ── 1. Scan all markets ──
       console.log(`\n[${ts()}] Scan #${cycle} — fetching markets…`);
       const markets = await scanMarkets();
@@ -82,7 +100,7 @@ async function main() {
         console.log("  ─────────────────────────────────────────────");
         for (const [i, o] of top.entries()) {
           const q = (o.market.question || "").slice(0, 50);
-          console.log(`  ${i + 1}. ${o.outcome} @ ${(o.price * 100).toFixed(0)}¢  edge:${(o.edge * 100).toFixed(1)}%  score:${o.score}  R/R:${o.rrRatio}x`);
+          console.log(`  ${i + 1}. ${o.outcome} @ ${(o.price * 100).toFixed(0)}c  edge:${(o.edge * 100).toFixed(1)}%  score:${o.score}  R/R:${o.rrRatio}x`);
           console.log(`     "${q}…"  [${o.reasons.join(", ")}]`);
         }
         console.log("  ─────────────────────────────────────────────");
@@ -98,6 +116,8 @@ async function main() {
         console.log(`[trade] Max positions (${CFG.maxPositions}) reached — holding`);
       } else if (budgetLeft <= 1) {
         console.log(`[trade] Portfolio budget exhausted ($${currentExposure.toFixed(0)}/$${CFG.maxPortfolioUsdc}) — holding`);
+      } else if ((state.dailySpent || 0) >= CFG.maxDailyUsdc) {
+        console.log(`[trade] Daily cap reached ($${state.dailySpent.toFixed(0)}/$${CFG.maxDailyUsdc}) — holding`);
       } else {
         let traded = 0;
         for (const opp of opps) {
@@ -108,10 +128,23 @@ async function main() {
           const key = opp.market.conditionId + "_" + opp.tokenId;
           if (state.positions[key]) continue;
 
+          // ── Guard: daily spending cap ──
+          if ((state.dailySpent || 0) + CFG.maxTradeUsdc > CFG.maxDailyUsdc) {
+            console.log(`[trade] Daily cap ($${CFG.maxDailyUsdc}) would be exceeded — stopping`);
+            break;
+          }
+
+          // ── Guard: spread check ──
+          const spreadCents = opp.spread != null ? Math.round(opp.spread * 100) : null;
+          if (spreadCents != null && spreadCents > CFG.maxSpreadCents) {
+            console.log(`[trade] Skip "${(opp.market.question || "").slice(0, 40)}" — spread ${spreadCents}c > ${CFG.maxSpreadCents}c`);
+            continue;
+          }
+
           const usdcToSpend = Math.min(CFG.maxTradeUsdc, budgetLeft - (traded * CFG.maxTradeUsdc));
           if (usdcToSpend < 1) break;
 
-          console.log(`\n[trade] >>> BUY "${opp.outcome}" @ ${(opp.price * 100).toFixed(0)}¢ for $${usdcToSpend.toFixed(2)}`);
+          console.log(`\n[trade] >>> BUY "${opp.outcome}" @ ${(opp.price * 100).toFixed(0)}c for $${usdcToSpend.toFixed(2)}`);
           console.log(`[trade]     "${(opp.market.question || "").slice(0, 60)}"`);
           console.log(`[trade]     edge:${(opp.edge * 100).toFixed(1)}% | R/R:${opp.rrRatio}x | reasons:[${opp.reasons.join(",")}]`);
 
@@ -140,6 +173,7 @@ async function main() {
               ts:          Date.now(),
             };
             state.totalInvested += usdcToSpend;
+            state.dailySpent = (state.dailySpent || 0) + usdcToSpend;
             saveState(state);
             console.log(`[trade] FILLED — ${shares.toFixed(1)} shares`);
             traded++;
@@ -151,7 +185,7 @@ async function main() {
         }
 
         if (traded === 0 && opps.length > 0) {
-          console.log("[trade] No new trades (already holding or budget limit)");
+          console.log("[trade] No new trades (already holding or budget/daily limit)");
         } else if (opps.length === 0) {
           console.log("[trade] No opportunities meet criteria this scan");
         }
@@ -160,20 +194,18 @@ async function main() {
       // ── 4. Portfolio status ──
       const positions = Object.values(state.positions);
       const exposure = positions.reduce((s, p) => s + p.cost, 0);
-      console.log(`\n[portfolio] ${positions.length} positions | $${exposure.toFixed(2)} deployed | $${(CFG.maxPortfolioUsdc - exposure).toFixed(2)} free`);
+      console.log(`\n[portfolio] ${positions.length}/${CFG.maxPositions} positions | $${exposure.toFixed(2)}/$${CFG.maxPortfolioUsdc} deployed | Today: $${(state.dailySpent || 0).toFixed(2)}/$${CFG.maxDailyUsdc}`);
 
       if (positions.length > 0) {
-        console.log("  ┌──────────────────────────────────────────────────┐");
         for (const p of positions) {
           const age = Math.round((Date.now() - p.ts) / 3_600_000);
-          console.log(`  │ ${p.outcome.padEnd(12)} @ ${(p.price * 100).toFixed(0)}¢  $${p.cost.toFixed(2)}  ${age}h ago`);
-          console.log(`  │   "${(p.question || "").slice(0, 46)}…"`);
+          console.log(`  * ${p.outcome.padEnd(12)} @ ${(p.price * 100).toFixed(0)}c  $${p.cost.toFixed(2)}  ${age}h ago  "${(p.question || "").slice(0, 40)}"`);
         }
-        console.log("  └──────────────────────────────────────────────────┘");
       }
 
     } catch (err) {
       console.log(`[error] ${err.message}`);
+      await sleep(5000);  // back off on errors
     }
 
     console.log(`\n[wait] Next scan in ${CFG.scanIntervalS}s…`);

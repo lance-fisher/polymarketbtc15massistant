@@ -1,25 +1,45 @@
 import { ethers } from "ethers";
 import { deriveApiKey, placeBuyOrder } from "./clob.js";
 import { CONFIG } from "../config.js";
+import { fetchOrderBook, summarizeOrderBook } from "../data/polymarket.js";
 
 const CLOB_URL = CONFIG.clobBaseUrl;
 
 /**
  * Auto-trade executor for BTC 15m markets.
  *
- * When the signal engine fires ENTER, this places a BUY order for the
- * recommended side.  It tracks one position per 15m market window and
- * won't double-buy in the same window.
+ * Safeguards:
+ *   - One position per 15m market window (no double-buy)
+ *   - Per-trade cap (MAX_TRADE_USDC)
+ *   - Daily spending cap ($30 default, resets midnight ET)
+ *   - Spread guard — skips if spread > 8 cents
+ *   - Max 1 trade per market (inherent from slug tracking)
  */
 export class Executor {
   constructor() {
     this.wallet     = null;
     this.creds      = null;
     this.enabled     = false;
-    this.currentSlug = null;     // slug of the market we already entered
-    this.position    = null;     // { tokenId, side, cost, shares, slug, ts }
-    this.history     = [];       // resolved trades
+    this.currentSlug = null;
+    this.position    = null;
+    this.history     = [];
     this.totalPnl    = 0;
+    this.dailySpent  = 0;
+    this.dailyResetDate = "";
+    this.maxDailyUsdc = Number(process.env.MAX_DAILY_USDC) || 30;
+    this.maxSpreadCents = Number(process.env.MAX_SPREAD_CENTS) || 8;
+  }
+
+  _todayET() {
+    return new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+  }
+
+  _resetDailyIfNeeded() {
+    const today = this._todayET();
+    if (this.dailyResetDate !== today) {
+      this.dailySpent = 0;
+      this.dailyResetDate = today;
+    }
   }
 
   async init() {
@@ -34,7 +54,7 @@ export class Executor {
 
     this.wallet = new ethers.Wallet(pk);
     console.log(`[trade] Wallet: ${this.wallet.address}`);
-    console.log(`[trade] Max per trade: $${this.maxUsdc}`);
+    console.log(`[trade] Max per trade: $${this.maxUsdc} | Daily cap: $${this.maxDailyUsdc} | Max spread: ${this.maxSpreadCents}c`);
 
     try {
       this.creds = await deriveApiKey(this.wallet, CLOB_URL);
@@ -45,9 +65,6 @@ export class Executor {
     }
   }
 
-  /**
-   * Called every poll cycle with the signal decision and polymarket snapshot.
-   */
   async onSignal(rec, poly) {
     if (!this.enabled) return;
     if (rec.action !== "ENTER" || !poly?.ok) return;
@@ -58,15 +75,34 @@ export class Executor {
     // Don't re-enter the same market
     if (this.currentSlug === slug) return;
 
+    // ── Guard: daily cap ──
+    this._resetDailyIfNeeded();
+    if (this.dailySpent + this.maxUsdc > this.maxDailyUsdc) {
+      return; // silently skip — status line will show
+    }
+
     const side    = rec.side;  // "UP" or "DOWN"
     const tokenId = side === "UP" ? poly.tokens.upTokenId : poly.tokens.downTokenId;
     const price   = side === "UP" ? poly.prices.up : poly.prices.down;
 
     if (!tokenId || !price || price <= 0 || price >= 1) return;
 
+    // ── Guard: spread check ──
+    try {
+      const book = await fetchOrderBook({ tokenId });
+      const summary = summarizeOrderBook(book);
+      const spreadCents = summary.spread != null ? Math.round(summary.spread * 100) : null;
+      if (spreadCents != null && spreadCents > this.maxSpreadCents) {
+        console.log(`[trade] Skip — spread ${spreadCents}c > ${this.maxSpreadCents}c`);
+        return;
+      }
+    } catch {
+      // If we can't check spread, proceed with caution
+    }
+
     const usdcToSpend = Math.min(this.maxUsdc, 50);
 
-    console.log(`\n[trade] >>> BUY ${side} @ $${price.toFixed(2)} for $${usdcToSpend.toFixed(2)}`);
+    console.log(`\n[trade] >>> BUY ${side} @ ${(price * 100).toFixed(0)}c for $${usdcToSpend.toFixed(2)}`);
 
     try {
       const result = await placeBuyOrder({
@@ -76,14 +112,15 @@ export class Executor {
         tokenId,
         price,
         usdcAmount: usdcToSpend,
-        negRisk: false,   // BTC 15m markets are standard
+        negRisk: false,
       });
 
       if (result.success || result.orderID) {
         const shares = usdcToSpend / price;
         this.currentSlug = slug;
         this.position = { tokenId, side, cost: usdcToSpend, shares, price, slug, ts: Date.now() };
-        console.log(`[trade] FILLED – ${side} ${shares.toFixed(1)} shares @ $${price.toFixed(2)}`);
+        this.dailySpent += usdcToSpend;
+        console.log(`[trade] FILLED – ${side} ${shares.toFixed(1)} shares @ ${(price * 100).toFixed(0)}c`);
       } else {
         console.log(`[trade] ORDER FAILED: ${result.errorMsg || JSON.stringify(result)}`);
       }
@@ -92,26 +129,19 @@ export class Executor {
     }
   }
 
-  /**
-   * Called when the market window rotates (new slug detected).
-   * Resolves the previous position.
-   */
   onMarketRotate(newSlug) {
     if (!this.position || this.position.slug === newSlug) return;
-
-    // The 15m market resolved. We either won or lost.
-    // We can't know the resolution from the bot alone, so we log it
-    // and track based on the last known price direction.
     const p = this.position;
-    console.log(`\n[trade] Market resolved: ${p.slug} (held ${p.side} ${p.shares.toFixed(1)} shares @ $${p.price.toFixed(2)})`);
+    console.log(`\n[trade] Market resolved: ${p.slug} (held ${p.side} ${p.shares.toFixed(1)} shares @ ${(p.price * 100).toFixed(0)}c)`);
     this.history.push({ ...p, resolvedAt: Date.now() });
     this.position = null;
     this.currentSlug = null;
   }
 
   statusLine() {
-    if (!this.enabled) return "[trade] disabled";
-    if (!this.position) return "[trade] waiting for signal…";
-    return `[trade] HOLDING ${this.position.side} (${this.position.shares.toFixed(1)} shares @ $${this.position.price.toFixed(2)}) | ${this.history.length} past trades`;
+    if (!this.enabled) return "disabled";
+    const dailyInfo = `$${this.dailySpent.toFixed(0)}/$${this.maxDailyUsdc} today`;
+    if (!this.position) return `waiting for signal… | ${dailyInfo}`;
+    return `HOLDING ${this.position.side} (${this.position.shares.toFixed(1)} shares @ ${(this.position.price * 100).toFixed(0)}c) | ${dailyInfo} | ${this.history.length} past`;
   }
 }

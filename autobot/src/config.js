@@ -5,8 +5,10 @@ export const CFG = {
   polygonRpc:       e.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com",
 
   maxTradeUsdc:     Number(e.MAX_TRADE_USDC) || 10,
-  maxPortfolioUsdc: Number(e.MAX_PORTFOLIO_USDC) || 100,
-  maxPositions:     Number(e.MAX_POSITIONS) || 10,
+  maxPortfolioUsdc: Number(e.MAX_PORTFOLIO_USDC) || 50,
+  maxPositions:     Number(e.MAX_POSITIONS) || 5,
+  maxDailyUsdc:     Number(e.MAX_DAILY_USDC) || 30,
+  maxSpreadCents:   Number(e.MAX_SPREAD_CENTS) || 8,
   scanIntervalS:    Number(e.SCAN_INTERVAL_S) || 60,
   minEdge:          Number(e.MIN_EDGE) || 0.08,
   minLiquidity:     Number(e.MIN_LIQUIDITY) || 1000,
