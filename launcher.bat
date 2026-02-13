@@ -9,13 +9,34 @@ if exist "D:\ProjectsHome" (
     set "DIR=%USERPROFILE%\polymarket-bots"
 )
 
-:: ── First-time check: if no repo, run start.bat for initial setup ──
+set "REPO=https://github.com/lance-fisher/polymarketbtc15massistant.git"
+set "BRANCH=claude/polymarket-copy-bot-xcdOo"
+
+:: ── First-time: clone if repo doesn't exist ──
 if not exist "%DIR%\.git" (
     echo.
-    echo   First run detected — running initial setup...
+    echo   First run — cloning repository...
     echo.
-    call "%~dp0start.bat"
-    exit /b
+    git clone -b %BRANCH% %REPO% "%DIR%"
+    if errorlevel 1 (
+        echo   [ERROR] Git clone failed. Make sure git is installed and you have internet.
+        pause
+        exit /b 1
+    )
+    cd /d "%DIR%"
+
+    echo   Installing dependencies...
+    call npm install --silent 2>nul
+    cd /d "%DIR%\copybot" && call npm install --silent 2>nul
+    cd /d "%DIR%\autobot" && call npm install --silent 2>nul
+    cd /d "%DIR%"
+
+    :: Run start.bat for .env setup + approvals if it exists
+    if exist "%DIR%\start.bat" (
+        echo   Running first-time setup...
+        call "%DIR%\start.bat"
+        exit /b
+    )
 )
 
 cd /d "%DIR%"
@@ -40,7 +61,7 @@ echo.
 
 :loop
 echo   [%time%] Pulling latest code...
-git pull origin claude/polymarket-copy-bot-xcdOo 2>nul
+git pull origin %BRANCH% 2>nul
 
 echo   [%time%] Checking dependencies...
 call npm install --silent 2>nul
@@ -72,27 +93,21 @@ goto loop
 set "SHORTCUT_NAME=Polymarket Bots.lnk"
 set "LAUNCHER_PATH=%DIR%\launcher.bat"
 
-:: Check each possible desktop location
 set "DESKTOP="
 if exist "%USERPROFILE%\OneDrive\Desktop" (
     set "DESKTOP=%USERPROFILE%\OneDrive\Desktop"
 ) else if exist "%USERPROFILE%\Desktop" (
     set "DESKTOP=%USERPROFILE%\Desktop"
 )
-
 if "%DESKTOP%"=="" (
-    :: Last resort: ask PowerShell for the actual desktop path
     for /f "usebackq tokens=*" %%d in (`powershell -Command "[Environment]::GetFolderPath('Desktop')"`) do set "DESKTOP=%%d"
 )
-
 if "%DESKTOP%"=="" (
     echo   [shortcut] Could not locate Desktop folder
     goto :eof
 )
 
 set "SHORTCUT=%DESKTOP%\%SHORTCUT_NAME%"
-
-:: Only create if it doesn't exist or points to old start.bat
 if exist "%SHORTCUT%" goto :eof
 
 echo   [shortcut] Creating desktop shortcut at %DESKTOP%...
@@ -100,6 +115,6 @@ powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateS
 if exist "%SHORTCUT%" (
     echo   [ok] Desktop shortcut created: "%SHORTCUT_NAME%"
 ) else (
-    echo   [skip] Could not create shortcut — you can run launcher.bat directly from %DIR%
+    echo   [skip] Could not create shortcut
 )
 goto :eof
