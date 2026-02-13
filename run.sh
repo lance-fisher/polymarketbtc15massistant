@@ -1,56 +1,65 @@
 #!/usr/bin/env bash
 set -e
-
 DIR="$(cd "$(dirname "$0")" && pwd)"
-echo "============================================"
-echo "  Polymarket Trading Bots"
-echo "============================================"
-echo ""
-
-# ── Check .env files ──
-if [ ! -f "$DIR/.env" ]; then
-  echo "ERROR: Missing .env in project root (BTC 15m bot)"
-  echo "  cp .env.example .env  and fill in PRIVATE_KEY"
-  exit 1
-fi
-
-if [ ! -f "$DIR/copybot/.env" ]; then
-  echo "ERROR: Missing copybot/.env (Copy bot)"
-  echo "  cp copybot/.env.example copybot/.env  and fill in PRIVATE_KEY"
-  exit 1
-fi
-
-# ── Install deps ──
-echo "[1/4] Installing dependencies..."
-cd "$DIR" && npm install --silent 2>/dev/null
-cd "$DIR/copybot" && npm install --silent 2>/dev/null
-
-# ── Run approvals for copy bot ──
-echo "[2/4] Running USDC approvals for Copy Bot..."
-cd "$DIR/copybot"
-npm run approve 2>&1 || echo "  (approvals skipped or already set)"
-
-# ── Start BTC 15m Signal + Auto-Trade Bot ──
-echo "[3/4] Starting BTC 15m Signal Bot (auto-trade enabled)..."
-cd "$DIR"
-npm start &
-PID_SIGNAL=$!
-
-# ── Start Copy Bot (@anoin123) ──
-echo "[4/4] Starting Copy Bot (@anoin123)..."
-cd "$DIR/copybot"
-npm start &
-PID_COPY=$!
 
 echo ""
-echo "============================================"
-echo "  BOTH BOTS RUNNING"
-echo "  Signal Bot PID: $PID_SIGNAL"
-echo "  Copy Bot PID:   $PID_COPY"
-echo "============================================"
-echo "  Press Ctrl+C to stop all bots"
+echo "  ╔══════════════════════════════════════════╗"
+echo "  ║     POLYMARKET TRADING BOTS LAUNCHER     ║"
+echo "  ╠══════════════════════════════════════════╣"
+echo "  ║  Bot 1: Copy Bot (@anoin123)             ║"
+echo "  ║  Bot 2: BTC 15m Signal Bot (auto-trade)  ║"
+echo "  ║  Bot 3: Autonomous Opportunity Bot       ║"
+echo "  ╚══════════════════════════════════════════╝"
 echo ""
 
-# ── Wait for Ctrl+C ──
-trap "echo 'Shutting down...'; kill $PID_SIGNAL $PID_COPY 2>/dev/null; exit 0" INT TERM
+mkdir -p "$DIR/logs"
+
+# ── Install all deps ──
+echo "[setup] Installing dependencies..."
+(cd "$DIR" && npm install --silent 2>/dev/null)
+(cd "$DIR/copybot" && npm install --silent 2>/dev/null)
+(cd "$DIR/autobot" && npm install --silent 2>/dev/null)
+echo "[setup] Done"
+
+# ── Run approvals ──
+echo "[setup] Running USDC approvals..."
+(cd "$DIR/copybot" && npm run approve 2>&1 | tail -3) || true
+(cd "$DIR/autobot" && npm run approve 2>&1 | tail -3) || true
+echo ""
+
+# ── Launch all 3 bots ──
+echo "[launch] Starting all bots..."
+
+(cd "$DIR/copybot" && npm start >> "$DIR/logs/copybot.log" 2>&1) &
+PID1=$!
+
+(cd "$DIR" && npm start >> "$DIR/logs/signal.log" 2>&1) &
+PID2=$!
+
+(cd "$DIR/autobot" && npm start >> "$DIR/logs/autobot.log" 2>&1) &
+PID3=$!
+
+echo ""
+echo "  ════════════════════════════════════════════"
+echo "  ALL 3 BOTS RUNNING"
+echo ""
+echo "  Copy Bot PID:       $PID1"
+echo "  Signal Bot PID:     $PID2"
+echo "  Autonomous Bot PID: $PID3"
+echo ""
+echo "  Logs streaming below (Ctrl+C to stop all)"
+echo "  ════════════════════════════════════════════"
+echo ""
+
+cleanup() {
+  echo ""
+  echo "Shutting down all bots..."
+  kill $PID1 $PID2 $PID3 2>/dev/null
+  exit 0
+}
+trap cleanup INT TERM
+
+tail -f "$DIR/logs/copybot.log" "$DIR/logs/signal.log" "$DIR/logs/autobot.log" 2>/dev/null &
+TAIL_PID=$!
+trap "kill $PID1 $PID2 $PID3 $TAIL_PID 2>/dev/null; exit 0" INT TERM
 wait
