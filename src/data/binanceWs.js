@@ -9,7 +9,8 @@ function toNumber(x) {
 
 function buildWsUrl(symbol) {
   const s = String(symbol || "").toLowerCase();
-  return `wss://stream.binance.com:9443/ws/${s}@trade`;
+  // Use Binance.US for US-based users; fall back to global
+  return `wss://stream.binance.us:9443/ws/${s}@trade`;
 }
 
 export function startBinanceTradeStream({ symbol = CONFIG.symbol, onUpdate } = {}) {

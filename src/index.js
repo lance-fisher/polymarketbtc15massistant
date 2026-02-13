@@ -740,9 +740,10 @@ async function main() {
       console.log("────────────────────────────");
       console.log(`Error: ${err?.message ?? String(err)}`);
       console.log("────────────────────────────");
+      await sleep(5_000);  // back off on errors
     }
 
-    await sleep(CONFIG.pollIntervalMs);
+    await sleep(Math.max(CONFIG.pollIntervalMs, 3_000));
   }
 }
 

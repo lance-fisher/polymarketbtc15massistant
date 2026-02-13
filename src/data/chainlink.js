@@ -20,7 +20,7 @@ function getRpcCandidates() {
   const fromList = Array.isArray(CONFIG.chainlink.polygonRpcUrls) ? CONFIG.chainlink.polygonRpcUrls : [];
   const single = CONFIG.chainlink.polygonRpcUrl ? [CONFIG.chainlink.polygonRpcUrl] : [];
   const defaults = [
-    "https://polygon-rpc.com",
+    "https://polygon-bor-rpc.publicnode.com",
     "https://rpc.ankr.com/polygon",
     "https://polygon.llamarpc.com"
   ];

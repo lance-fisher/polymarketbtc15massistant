@@ -5,41 +5,7 @@ function toNumber(x) {
   return Number.isFinite(n) ? n : null;
 }
 
-/* ── Binance.US (primary) ────────────────────────────────── */
-
-async function fetchKlinesBinance({ interval, limit }) {
-  const url = new URL("/api/v3/klines", CONFIG.binanceBaseUrl);
-  url.searchParams.set("symbol", CONFIG.symbol);
-  url.searchParams.set("interval", interval);
-  url.searchParams.set("limit", String(limit));
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Binance klines error: ${res.status} ${await res.text()}`);
-  }
-  const data = await res.json();
-
-  return data.map((k) => ({
-    openTime: Number(k[0]),
-    open: toNumber(k[1]),
-    high: toNumber(k[2]),
-    low: toNumber(k[3]),
-    close: toNumber(k[4]),
-    volume: toNumber(k[5]),
-    closeTime: Number(k[6])
-  }));
-}
-
-async function fetchLastPriceBinance() {
-  const url = new URL("/api/v3/ticker/price", CONFIG.binanceBaseUrl);
-  url.searchParams.set("symbol", CONFIG.symbol);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Binance last price error: ${res.status}`);
-  const data = await res.json();
-  return toNumber(data.price);
-}
-
-/* ── Kraken (fallback) ───────────────────────────────────── */
+/* ── Kraken (primary — works in US, no auth needed) ──────── */
 
 const KRAKEN_INTERVAL_MAP = { "1m": 1, "5m": 5, "15m": 15, "1h": 60, "4h": 240, "1d": 1440 };
 
@@ -70,24 +36,59 @@ async function fetchLastPriceKraken() {
   if (!res.ok) throw new Error(`Kraken ticker error: ${res.status}`);
   const json = await res.json();
   const pair = Object.keys(json.result)[0];
-  return toNumber(json.result[pair].c[0]); // last trade close price
+  return toNumber(json.result[pair].c[0]);
 }
 
-/* ── Exported with automatic fallback ────────────────────── */
+/* ── Binance.US (fallback) ───────────────────────────────── */
+
+async function fetchKlinesBinance({ interval, limit }) {
+  const url = new URL("/api/v3/klines", CONFIG.binanceBaseUrl);
+  url.searchParams.set("symbol", CONFIG.symbol);
+  url.searchParams.set("interval", interval);
+  url.searchParams.set("limit", String(limit));
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Binance klines error: ${res.status}`);
+  const data = await res.json();
+
+  return data.map((k) => ({
+    openTime: Number(k[0]),
+    open: toNumber(k[1]),
+    high: toNumber(k[2]),
+    low: toNumber(k[3]),
+    close: toNumber(k[4]),
+    volume: toNumber(k[5]),
+    closeTime: Number(k[6])
+  }));
+}
+
+async function fetchLastPriceBinance() {
+  const url = new URL("/api/v3/ticker/price", CONFIG.binanceBaseUrl);
+  url.searchParams.set("symbol", CONFIG.symbol);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Binance last price error: ${res.status}`);
+  const data = await res.json();
+  return toNumber(data.price);
+}
+
+/* ── Exported: Kraken first, Binance.US fallback ─────────── */
 
 export async function fetchKlines(opts) {
   try {
-    return await fetchKlinesBinance(opts);
-  } catch (e) {
-    console.log(`[data] Binance failed (${e.message}), falling back to Kraken`);
     return await fetchKlinesKraken(opts);
+  } catch (e) {
+    try {
+      return await fetchKlinesBinance(opts);
+    } catch (e2) {
+      throw new Error(`All price sources failed: Kraken(${e.message}), Binance(${e2.message})`);
+    }
   }
 }
 
 export async function fetchLastPrice() {
   try {
-    return await fetchLastPriceBinance();
-  } catch {
     return await fetchLastPriceKraken();
+  } catch {
+    return await fetchLastPriceBinance();
   }
 }

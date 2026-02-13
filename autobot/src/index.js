@@ -31,17 +31,21 @@ async function main() {
 
   if (!CFG.privateKey) { console.error("PRIVATE_KEY required. See .env.example"); process.exit(1); }
 
-  const provider = new ethers.JsonRpcProvider(CFG.polygonRpc);
+  const provider = new ethers.JsonRpcProvider(CFG.polygonRpc, 137, { staticNetwork: true });
   const wallet = new ethers.Wallet(CFG.privateKey, provider);
   console.log(`[init] Wallet: ${wallet.address}`);
 
   let creds;
-  try {
-    creds = await deriveApiKey(wallet);
-    console.log(`[init] CLOB API: ${creds.apiKey.slice(0, 8)}…`);
-  } catch (e) {
-    console.error(`[init] CLOB auth failed: ${e.message}`);
-    process.exit(1);
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      creds = await deriveApiKey(wallet);
+      console.log(`[init] CLOB API: ${creds.apiKey.slice(0, 8)}…`);
+      break;
+    } catch (e) {
+      console.log(`[init] CLOB auth attempt ${attempt}/5 failed: ${e.message}`);
+      if (attempt === 5) { console.error("[init] CLOB auth failed after 5 attempts"); process.exit(1); }
+      await sleep(attempt * 3000);
+    }
   }
 
   // Check balance

@@ -67,19 +67,23 @@ async function main() {
   if (!CFG.privateKey) { console.error("PRIVATE_KEY is required. See .env.example"); process.exit(1); }
 
   // ── Wallet setup ──
-  const provider = new ethers.JsonRpcProvider(CFG.polygonRpc);
+  const provider = new ethers.JsonRpcProvider(CFG.polygonRpc, 137, { staticNetwork: true });
   const wallet   = new ethers.Wallet(CFG.privateKey, provider);
   log("init", `Wallet: ${wallet.address}`);
 
-  // ── Derive CLOB API credentials ──
+  // ── Derive CLOB API credentials (with retry) ──
   log("init", "Deriving CLOB API credentials…");
   let creds;
-  try {
-    creds = await deriveApiKey(wallet);
-    log("init", `API key: ${creds.apiKey.slice(0, 8)}…`);
-  } catch (e) {
-    console.error("Failed to derive API key:", e.message);
-    process.exit(1);
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      creds = await deriveApiKey(wallet);
+      log("init", `API key: ${creds.apiKey.slice(0, 8)}…`);
+      break;
+    } catch (e) {
+      log("init", `CLOB auth attempt ${attempt}/5 failed: ${e.message}`);
+      if (attempt === 5) { console.error("CLOB auth failed after 5 attempts"); process.exit(1); }
+      await sleep(attempt * 3000);
+    }
   }
 
   // ── Resolve target address ──
