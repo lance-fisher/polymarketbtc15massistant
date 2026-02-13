@@ -5,10 +5,10 @@
  * Run: node web-dashboard.js
  */
 import http from "node:http";
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, statSync, createWriteStream, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { exec } from "node:child_process";
+import { exec, spawn } from "node:child_process";
 import { ethers } from "ethers";
 
 const PORT = 3847;
@@ -81,6 +81,79 @@ async function fetchBal(addr) {
   return null;
 }
 
+// ── Bot Process Management ──
+const BRANCH = "claude/polymarket-copy-bot-xcdOo";
+const BOT_DEFS = [
+  { name: "CopyBot",   cwd: path.join(ROOT, "copybot"), envFile: path.join(ROOT, "copybot", ".env"), script: path.join("src", "index.js"), logKey: "copy" },
+  { name: "SignalBot",  cwd: ROOT,                       envFile: path.join(ROOT, ".env"),             script: path.join("src", "index.js"), logKey: "signal" },
+  { name: "AutoBot",    cwd: path.join(ROOT, "autobot"), envFile: path.join(ROOT, "autobot", ".env"), script: path.join("src", "index.js"), logKey: "auto" },
+];
+const botProcs = [];
+
+function loadEnvFile(fp) {
+  const env = { ...process.env };
+  try {
+    if (!existsSync(fp)) return env;
+    for (const line of readFileSync(fp, "utf8").split("\n")) {
+      const eq = line.indexOf("=");
+      if (eq > 0) env[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+    }
+  } catch {}
+  return env;
+}
+
+function spawnBots() {
+  if (!existsSync(path.join(ROOT, "logs"))) mkdirSync(path.join(ROOT, "logs"), { recursive: true });
+  for (const def of BOT_DEFS) {
+    if (!existsSync(def.envFile)) { console.log(`  [bot] ${def.name} skipped (no .env)`); continue; }
+    const env = loadEnvFile(def.envFile);
+    const logStream = createWriteStream(LOGS[def.logKey], { flags: "a" });
+    const proc = spawn("node", [def.script], { cwd: def.cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    proc.stdout.pipe(logStream);
+    proc.stderr.pipe(logStream);
+    proc.on("exit", (code) => console.log(`  [bot] ${def.name} exited (code ${code})`));
+    botProcs.push({ name: def.name, proc });
+    console.log(`  [bot] ${def.name} started (pid ${proc.pid})`);
+  }
+}
+
+function killBots() {
+  for (const { name, proc } of botProcs) {
+    try { proc.kill(); console.log(`  [bot] ${name} stopped`); } catch {}
+  }
+  botProcs.length = 0;
+}
+
+// ── Auto-Update from Git ──
+let lastUpdateCheck = null;
+let updateStatus = "idle";
+
+function checkForUpdates() {
+  exec(`git fetch origin ${BRANCH}`, { cwd: ROOT, timeout: 15000 }, (err) => {
+    if (err) { updateStatus = "fetch-error"; return; }
+    exec("git rev-parse HEAD", { cwd: ROOT }, (err, localHash) => {
+      if (err) return;
+      exec(`git rev-parse origin/${BRANCH}`, { cwd: ROOT }, (err, remoteHash) => {
+        if (err) return;
+        lastUpdateCheck = new Date();
+        if (localHash.trim() !== remoteHash.trim()) {
+          updateStatus = "updating";
+          console.log("\n  [update] New code detected! Pulling...");
+          exec(`git pull origin ${BRANCH}`, { cwd: ROOT, timeout: 30000 }, (pullErr) => {
+            if (pullErr) { console.log("  [update] Pull failed:", pullErr.message); updateStatus = "pull-error"; return; }
+            console.log("  [update] Updated! Restarting everything...\n");
+            killBots();
+            setTimeout(() => process.exit(0), 2000);
+          });
+        } else {
+          updateStatus = "up-to-date";
+        }
+      });
+    });
+  });
+}
+
+// ── Helpers ──
 function loadJson(fp) {
   try { return existsSync(fp) ? JSON.parse(readFileSync(fp, "utf8")) : null; } catch { return null; }
 }
@@ -174,6 +247,8 @@ async function getStatus() {
       active: fileAge(LOGS.signal) !== null && fileAge(LOGS.signal) < 120000,
     },
     activity: activity.slice(-20),
+    updateStatus,
+    lastUpdateCheck: lastUpdateCheck ? lastUpdateCheck.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour12: true }) : null,
   };
 }
 
@@ -238,6 +313,10 @@ const HTML = `<!DOCTYPE html>
   .sg-item .sg-val { font-size: 18px; font-weight: 700; color: #e6edf3; }
   .sg-item .sg-label { font-size: 10px; color: #8b949e; text-transform: uppercase; }
   .refresh-bar { text-align: center; color: #484f58; font-size: 11px; padding: 10px; }
+  .update-bar { text-align: center; font-size: 11px; padding: 6px; background: #0d1117; border-bottom: 1px solid #21262d; }
+  .update-bar .up { color: #3fb950; }
+  .update-bar .err { color: #f85149; }
+  .update-bar .busy { color: #d29922; }
   .footer { text-align: center; padding: 20px; color: #30363d; font-size: 12px; }
 </style>
 </head>
@@ -248,6 +327,7 @@ const HTML = `<!DOCTYPE html>
   <div class="time" id="time"></div>
   <div class="status-row" id="statusRow"></div>
 </div>
+<div class="update-bar" id="updateBar"></div>
 
 <div class="container">
   <div class="grid" id="wallets"></div>
@@ -301,7 +381,7 @@ const HTML = `<!DOCTYPE html>
     <div class="activity" id="activity"></div>
   </div>
 
-  <div class="refresh-bar">Auto-refreshes every 10 seconds</div>
+  <div class="refresh-bar">Dashboard refreshes every 10s · Code auto-updates from git every 60s · Bots managed by dashboard</div>
   <div class="footer">created by @krajekis</div>
 </div>
 
@@ -396,6 +476,17 @@ async function refresh() {
         '<div class="activity-line ' + a.bot + '"><span class="bot-tag">[' + a.bot.toUpperCase().slice(0,3) + ']</span>' + a.line.slice(0, 120) + '</div>'
       ).join('');
     }
+    // Update status bar
+    var ub = document.getElementById('updateBar');
+    if (d.updateStatus === 'updating') {
+      ub.innerHTML = '<span class="busy">Updating... restarting shortly</span>';
+    } else if (d.updateStatus === 'up-to-date' && d.lastUpdateCheck) {
+      ub.innerHTML = '<span class="up">Auto-update active</span> · Last check: ' + d.lastUpdateCheck + ' ET';
+    } else if (d.updateStatus && d.updateStatus.includes('error')) {
+      ub.innerHTML = '<span class="err">Update check failed</span> — will retry in 60s';
+    } else {
+      ub.innerHTML = 'Auto-update: starting...';
+    }
   } catch(e) {
     console.error('Refresh failed:', e);
   }
@@ -425,8 +516,24 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n  Dashboard running at: http://localhost:${PORT}\n`);
+  console.log(`\n  Dashboard running at: http://localhost:${PORT}`);
+
+  // Spawn all bots as child processes
+  console.log("  Starting bots...");
+  spawnBots();
+
+  // Start auto-update polling (every 60 seconds)
+  console.log("  Auto-update enabled (checks every 60s)\n");
+  checkForUpdates();
+  setInterval(checkForUpdates, 60000);
+
   // Auto-open browser
   const cmd = process.platform === "win32" ? "start" : process.platform === "darwin" ? "open" : "xdg-open";
   exec(`${cmd} http://localhost:${PORT}`);
 });
+
+// Clean shutdown — kill bot children on exit
+function shutdown() { killBots(); process.exit(0); }
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+process.on("exit", () => { for (const { proc } of botProcs) try { proc.kill(); } catch {} });
