@@ -181,7 +181,12 @@ echo.
 :: Give bots 3 seconds to start writing logs
 timeout /t 3 /nobreak >nul
 
-:: Launch dashboard in THIS window (user sees it)
+:: Launch web dashboard (opens in browser automatically)
 title Polymarket Dashboard
 cd /d "%DIR%"
-node dashboard.js
+echo   Dashboard opening in your browser...
+echo   (http://localhost:3847)
+echo.
+echo   Keep this window open. Press Ctrl+C to stop dashboard.
+echo.
+node web-dashboard.js
