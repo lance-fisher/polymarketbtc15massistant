@@ -102,18 +102,39 @@ function loadEnvFile(fp) {
   return env;
 }
 
+function spawnBot(def) {
+  if (!existsSync(def.envFile)) { console.log(`  [bot] ${def.name} skipped (no .env)`); return null; }
+  const env = loadEnvFile(def.envFile);
+  const logStream = createWriteStream(LOGS[def.logKey], { flags: "a" });
+  const proc = spawn("node", [def.script], { cwd: def.cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+  proc.stdout.pipe(logStream);
+  proc.stderr.pipe(logStream);
+  const entry = { name: def.name, proc, def, restarts: 0 };
+  proc.on("exit", (code) => {
+    console.log(`  [bot] ${def.name} exited (code ${code})`);
+    if (entry.restarts < 50) {
+      const delay = Math.min(5000 + entry.restarts * 2000, 60000);
+      console.log(`  [bot] ${def.name} will restart in ${delay / 1000}s (restart #${entry.restarts + 1})`);
+      setTimeout(() => {
+        entry.restarts++;
+        const idx = botProcs.indexOf(entry);
+        if (idx >= 0) botProcs.splice(idx, 1);
+        const newEntry = spawnBot(def);
+        if (newEntry) newEntry.restarts = entry.restarts;
+      }, delay);
+    } else {
+      console.log(`  [bot] ${def.name} exceeded restart limit — giving up`);
+    }
+  });
+  botProcs.push(entry);
+  console.log(`  [bot] ${def.name} started (pid ${proc.pid})`);
+  return entry;
+}
+
 function spawnBots() {
   if (!existsSync(path.join(ROOT, "logs"))) mkdirSync(path.join(ROOT, "logs"), { recursive: true });
   for (const def of BOT_DEFS) {
-    if (!existsSync(def.envFile)) { console.log(`  [bot] ${def.name} skipped (no .env)`); continue; }
-    const env = loadEnvFile(def.envFile);
-    const logStream = createWriteStream(LOGS[def.logKey], { flags: "a" });
-    const proc = spawn("node", [def.script], { cwd: def.cwd, env, stdio: ["ignore", "pipe", "pipe"] });
-    proc.stdout.pipe(logStream);
-    proc.stderr.pipe(logStream);
-    proc.on("exit", (code) => console.log(`  [bot] ${def.name} exited (code ${code})`));
-    botProcs.push({ name: def.name, proc });
-    console.log(`  [bot] ${def.name} started (pid ${proc.pid})`);
+    spawnBot(def);
   }
 }
 
