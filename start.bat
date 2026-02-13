@@ -43,6 +43,11 @@ if exist "%DIR%\.git" (
     git checkout %BRANCH% 2>nul
     git pull origin %BRANCH% 2>nul
 ) else (
+    :: If folder exists but isn't a git repo, remove it first
+    if exist "%DIR%" (
+        echo   [cleanup] Removing incomplete install at %DIR%...
+        rmdir /s /q "%DIR%" 2>nul
+    )
     echo   [clone] Cloning to %DIR% ...
     git clone -b %BRANCH% %REPO% "%DIR%"
 )

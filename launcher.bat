@@ -15,11 +15,16 @@ set "BRANCH=claude/polymarket-copy-bot-xcdOo"
 :: ── First-time: clone if repo doesn't exist ──
 if not exist "%DIR%\.git" (
     echo.
-    echo   First run — cloning repository...
+    echo   First run — setting up repository...
     echo.
+    :: If folder exists but isn't a git repo, remove it first
+    if exist "%DIR%" (
+        echo   Removing incomplete install at %DIR%...
+        rmdir /s /q "%DIR%" 2>nul
+    )
     git clone -b %BRANCH% %REPO% "%DIR%"
     if errorlevel 1 (
-        echo   [ERROR] Git clone failed. Make sure git is installed and you have internet.
+        echo   [ERROR] Git clone failed. Check internet and try again.
         pause
         exit /b 1
     )
