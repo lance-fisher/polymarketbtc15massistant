@@ -537,6 +537,24 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+let listenRetries = 0;
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE" && listenRetries < 5) {
+    listenRetries++;
+    console.log(`  Port ${PORT} in use — killing old process and retrying in 3s... (attempt ${listenRetries}/5)`);
+    // Try to kill whatever is holding the port
+    const killCmd = process.platform === "win32"
+      ? `for /f "tokens=5" %a in ('netstat -aon ^| findstr :${PORT} ^| findstr LISTENING') do taskkill /F /PID %a`
+      : `fuser -k ${PORT}/tcp`;
+    exec(killCmd, () => {
+      setTimeout(() => server.listen(PORT), 3000);
+    });
+  } else {
+    console.error(`  Fatal server error: ${err.message}`);
+    process.exit(1);
+  }
+});
+
 server.listen(PORT, () => {
   console.log(`\n  Dashboard running at: http://localhost:${PORT}`);
 

@@ -54,7 +54,7 @@ taskkill /F /FI "WINDOWTITLE eq CopyBot*"  2>nul >nul
 taskkill /F /FI "WINDOWTITLE eq SignalBot*" 2>nul >nul
 taskkill /F /FI "WINDOWTITLE eq AutoBot*"   2>nul >nul
 taskkill /F /FI "WINDOWTITLE eq Dashboard*" 2>nul >nul
-timeout /t 1 /nobreak >nul
+ping -n 2 127.0.0.1 >nul
 
 echo.
 echo   ╔══════════════════════════════════════════════════════╗
@@ -94,7 +94,7 @@ node web-dashboard.js
 echo.
 echo   [%time%] Dashboard exited (update or crash). Restarting in 5s...
 echo.
-timeout /t 5 /nobreak >nul
+ping -n 6 127.0.0.1 >nul
 goto loop
 
 :: ═══════════════════════════════════════════════════════
