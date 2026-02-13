@@ -5,7 +5,9 @@ function toNumber(x) {
   return Number.isFinite(n) ? n : null;
 }
 
-export async function fetchKlines({ interval, limit }) {
+/* ── Binance.US (primary) ────────────────────────────────── */
+
+async function fetchKlinesBinance({ interval, limit }) {
   const url = new URL("/api/v3/klines", CONFIG.binanceBaseUrl);
   url.searchParams.set("symbol", CONFIG.symbol);
   url.searchParams.set("interval", interval);
@@ -28,13 +30,64 @@ export async function fetchKlines({ interval, limit }) {
   }));
 }
 
-export async function fetchLastPrice() {
+async function fetchLastPriceBinance() {
   const url = new URL("/api/v3/ticker/price", CONFIG.binanceBaseUrl);
   url.searchParams.set("symbol", CONFIG.symbol);
   const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Binance last price error: ${res.status} ${await res.text()}`);
-  }
+  if (!res.ok) throw new Error(`Binance last price error: ${res.status}`);
   const data = await res.json();
   return toNumber(data.price);
+}
+
+/* ── Kraken (fallback) ───────────────────────────────────── */
+
+const KRAKEN_INTERVAL_MAP = { "1m": 1, "5m": 5, "15m": 15, "1h": 60, "4h": 240, "1d": 1440 };
+
+async function fetchKlinesKraken({ interval, limit }) {
+  const mins = KRAKEN_INTERVAL_MAP[interval] || 15;
+  const url = `https://api.kraken.com/0/public/OHLC?pair=XBTUSDT&interval=${mins}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Kraken OHLC error: ${res.status}`);
+  const json = await res.json();
+  if (json.error && json.error.length) throw new Error(`Kraken: ${json.error[0]}`);
+
+  const pair = Object.keys(json.result).find(k => k !== "last");
+  const raw = json.result[pair] || [];
+
+  return raw.slice(-limit).map((k) => ({
+    openTime:  k[0] * 1000,
+    open:      toNumber(k[1]),
+    high:      toNumber(k[2]),
+    low:       toNumber(k[3]),
+    close:     toNumber(k[4]),
+    volume:    toNumber(k[6]),  // index 6 on Kraken (5 is VWAP)
+    closeTime: k[0] * 1000 + mins * 60 * 1000 - 1
+  }));
+}
+
+async function fetchLastPriceKraken() {
+  const res = await fetch("https://api.kraken.com/0/public/Ticker?pair=XBTUSDT");
+  if (!res.ok) throw new Error(`Kraken ticker error: ${res.status}`);
+  const json = await res.json();
+  const pair = Object.keys(json.result)[0];
+  return toNumber(json.result[pair].c[0]); // last trade close price
+}
+
+/* ── Exported with automatic fallback ────────────────────── */
+
+export async function fetchKlines(opts) {
+  try {
+    return await fetchKlinesBinance(opts);
+  } catch (e) {
+    console.log(`[data] Binance failed (${e.message}), falling back to Kraken`);
+    return await fetchKlinesKraken(opts);
+  }
+}
+
+export async function fetchLastPrice() {
+  try {
+    return await fetchLastPriceBinance();
+  } catch {
+    return await fetchLastPriceKraken();
+  }
 }

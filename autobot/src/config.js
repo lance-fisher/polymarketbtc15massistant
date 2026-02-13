@@ -2,7 +2,7 @@ const e = process.env;
 
 export const CFG = {
   privateKey:       e.PRIVATE_KEY || "",
-  polygonRpc:       e.POLYGON_RPC_URL || "https://polygon-rpc.com",
+  polygonRpc:       e.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com",
 
   maxTradeUsdc:     Number(e.MAX_TRADE_USDC) || 10,
   maxPortfolioUsdc: Number(e.MAX_PORTFOLIO_USDC) || 100,

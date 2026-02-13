@@ -2,7 +2,7 @@ const e = process.env;
 
 export const CFG = {
   privateKey:      e.PRIVATE_KEY || "",
-  polygonRpc:      e.POLYGON_RPC_URL || "https://polygon-rpc.com",
+  polygonRpc:      e.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com",
 
   targetUsername:  e.TARGET_USERNAME || "anoin123",
   targetAddress:   e.TARGET_ADDRESS || "",

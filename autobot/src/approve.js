@@ -1,10 +1,22 @@
 import { ethers } from "ethers";
 import { CFG } from "./config.js";
 const MAX = ethers.MaxUint256;
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function retry(fn, retries = 3, delayMs = 5000) {
+  for (let i = 0; i <= retries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (i === retries) throw e;
+      console.log(`  Retry ${i + 1}/${retries} in ${delayMs / 1000}s — ${e.message.slice(0, 80)}`);
+      await sleep(delayMs * (i + 1));
+    }
+  }
+}
 
 async function main() {
   if (!CFG.privateKey) { console.error("Set PRIVATE_KEY in .env"); process.exit(1); }
-  const provider = new ethers.JsonRpcProvider(CFG.polygonRpc);
+  const provider = new ethers.JsonRpcProvider(CFG.polygonRpc, 137, { staticNetwork: true });
   const wallet = new ethers.Wallet(CFG.privateKey, provider);
   console.log(`Wallet: ${wallet.address}`);
 
@@ -13,16 +25,25 @@ async function main() {
   const ctf = new ethers.Contract(CFG.ctf,
     ["function setApprovalForAll(address,bool)", "function isApprovedForAll(address,address) view returns (bool)"], wallet);
 
+  const gasOverrides = { maxFeePerGas: ethers.parseUnits("50", "gwei"), maxPriorityFeePerGas: ethers.parseUnits("30", "gwei") };
+
   for (const [label, addr] of [["Exchange", CFG.exchange], ["NegRisk Exchange", CFG.negRiskExchange], ["NegRisk Adapter", CFG.negRiskAdapter]]) {
-    const allow = await usdc.allowance(wallet.address, addr);
+    const allow = await retry(() => usdc.allowance(wallet.address, addr));
     if (allow < ethers.parseUnits("1000000", 6)) {
       console.log(`Approving USDC for ${label}…`);
-      await (await usdc.approve(addr, MAX)).wait();
+      const tx = await retry(() => usdc.approve(addr, MAX, gasOverrides));
+      await tx.wait();
+      console.log(`  tx ${tx.hash}`);
     } else { console.log(`USDC OK for ${label}`); }
-    if (!(await ctf.isApprovedForAll(wallet.address, addr))) {
+
+    if (!(await retry(() => ctf.isApprovedForAll(wallet.address, addr)))) {
       console.log(`Approving CTF for ${label}…`);
-      await (await ctf.setApprovalForAll(addr, true)).wait();
+      const tx = await retry(() => ctf.setApprovalForAll(addr, true, gasOverrides));
+      await tx.wait();
+      console.log(`  tx ${tx.hash}`);
     } else { console.log(`CTF OK for ${label}`); }
+
+    await sleep(2000);
   }
   console.log("\nAll approvals set.");
 }

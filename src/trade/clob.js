@@ -23,7 +23,8 @@ export async function deriveApiKey(wallet, clobUrl) {
     message: "This message attests that I control the given wallet",
   });
 
-  const res = await fetch(`${clobUrl}/auth/derive-api-key`, {
+  // Try create first (POST), fall back to derive (GET)
+  let res = await fetch(`${clobUrl}/auth/api-key`, {
     method: "POST",
     headers: {
       "Content-Type":  "application/json",
@@ -33,6 +34,18 @@ export async function deriveApiKey(wallet, clobUrl) {
       "POLY-NONCE":     "0",
     },
   });
+  if (!res.ok) {
+    // Key already exists — derive it
+    res = await fetch(`${clobUrl}/auth/derive-api-key`, {
+      method: "GET",
+      headers: {
+        "POLY-ADDRESS":   wallet.address,
+        "POLY-SIGNATURE": sig,
+        "POLY-TIMESTAMP": ts,
+        "POLY-NONCE":     "0",
+      },
+    });
+  }
   if (!res.ok) throw new Error(`derive-api-key ${res.status}: ${await res.text()}`);
   return res.json();
 }

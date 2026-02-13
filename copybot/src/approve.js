@@ -6,11 +6,23 @@ import { ethers } from "ethers";
 import { CFG } from "./config.js";
 
 const MAX = ethers.MaxUint256;
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function retry(fn, retries = 3, delayMs = 5000) {
+  for (let i = 0; i <= retries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (i === retries) throw e;
+      console.log(`  Retry ${i + 1}/${retries} in ${delayMs / 1000}s — ${e.message.slice(0, 80)}`);
+      await sleep(delayMs * (i + 1));
+    }
+  }
+}
 
 async function main() {
   if (!CFG.privateKey) { console.error("Set PRIVATE_KEY in .env"); process.exit(1); }
 
-  const provider = new ethers.JsonRpcProvider(CFG.polygonRpc);
+  const provider = new ethers.JsonRpcProvider(CFG.polygonRpc, 137, { staticNetwork: true });
   const wallet = new ethers.Wallet(CFG.privateKey, provider);
   console.log(`Wallet: ${wallet.address}`);
 
@@ -30,28 +42,30 @@ async function main() {
     { label: "Neg-Risk Adapter",      addr: CFG.negRiskAdapter },
   ];
 
+  const gasOverrides = { maxFeePerGas: ethers.parseUnits("50", "gwei"), maxPriorityFeePerGas: ethers.parseUnits("30", "gwei") };
+
   for (const t of targets) {
-    // USDC approval
-    const allow = await usdc.allowance(wallet.address, t.addr);
+    const allow = await retry(() => usdc.allowance(wallet.address, t.addr));
     if (allow < ethers.parseUnits("1000000", 6)) {
       console.log(`Approving USDC for ${t.label}…`);
-      const tx = await usdc.approve(t.addr, MAX);
+      const tx = await retry(() => usdc.approve(t.addr, MAX, gasOverrides));
       await tx.wait();
-      console.log(`  ✓ tx ${tx.hash}`);
+      console.log(`  tx ${tx.hash}`);
     } else {
       console.log(`USDC already approved for ${t.label}`);
     }
 
-    // CTF (ERC-1155) approval
-    const ok = await ctf.isApprovedForAll(wallet.address, t.addr);
+    const ok = await retry(() => ctf.isApprovedForAll(wallet.address, t.addr));
     if (!ok) {
       console.log(`Approving CTF for ${t.label}…`);
-      const tx = await ctf.setApprovalForAll(t.addr, true);
+      const tx = await retry(() => ctf.setApprovalForAll(t.addr, true, gasOverrides));
       await tx.wait();
-      console.log(`  ✓ tx ${tx.hash}`);
+      console.log(`  tx ${tx.hash}`);
     } else {
       console.log(`CTF already approved for ${t.label}`);
     }
+
+    await sleep(2000);
   }
 
   console.log("\nAll approvals set. You can now run: npm start");
