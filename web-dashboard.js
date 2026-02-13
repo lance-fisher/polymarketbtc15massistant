@@ -109,9 +109,10 @@ function spawnBot(def) {
   const proc = spawn("node", [def.script], { cwd: def.cwd, env, stdio: ["ignore", "pipe", "pipe"] });
   proc.stdout.pipe(logStream);
   proc.stderr.pipe(logStream);
-  const entry = { name: def.name, proc, def, restarts: 0 };
+  const entry = { name: def.name, proc, def, restarts: 0, logStream };
   proc.on("exit", (code) => {
     console.log(`  [bot] ${def.name} exited (code ${code})`);
+    try { logStream.end(); } catch {}
     if (entry.restarts < 50) {
       const delay = Math.min(5000 + entry.restarts * 2000, 60000);
       console.log(`  [bot] ${def.name} will restart in ${delay / 1000}s (restart #${entry.restarts + 1})`);

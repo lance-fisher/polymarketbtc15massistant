@@ -150,16 +150,21 @@ Write-Host ""
 # ── Create desktop shortcut ──
 Write-Host "  [shortcut] Creating desktop shortcut..."
 try {
+    $desktopPath = [Environment]::GetFolderPath("Desktop")
+    if (-not $desktopPath -or -not (Test-Path $desktopPath)) {
+        if (Test-Path "$env:USERPROFILE\OneDrive\Desktop") { $desktopPath = "$env:USERPROFILE\OneDrive\Desktop" }
+        elseif (Test-Path "$env:USERPROFILE\Desktop") { $desktopPath = "$env:USERPROFILE\Desktop" }
+    }
     $ws = New-Object -ComObject WScript.Shell
-    $s = $ws.CreateShortcut("$env:USERPROFILE\Desktop\Polymarket Bots.lnk")
+    $s = $ws.CreateShortcut("$desktopPath\Polymarket Bots.lnk")
     $s.TargetPath = "$DIR\launcher.bat"
     $s.WorkingDirectory = $DIR
     $s.IconLocation = "shell32.dll,21"
     $s.Description = "Launch Polymarket Trading Suite"
     $s.Save()
-    Write-Host "  [ok] Desktop shortcut created" -ForegroundColor Green
+    Write-Host "  [ok] Desktop shortcut created at $desktopPath" -ForegroundColor Green
 } catch {
-    Write-Host "  [skip] Could not create shortcut"
+    Write-Host "  [skip] Could not create shortcut: $_"
 }
 
 Write-Host ""

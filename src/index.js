@@ -443,9 +443,8 @@ async function main() {
           ? Promise.resolve({ price: chainlinkWsPrice, updatedAt: chainlinkWsTick?.updatedAt ?? null, source: "chainlink_ws" })
           : fetchChainlinkBtcUsd();
 
-      const [klines1m, klines5m, lastPrice, chainlink, poly] = await Promise.all([
+      const [klines1m, lastPrice, chainlink, poly] = await Promise.all([
         fetchKlines({ interval: "1m", limit: 240 }),
-        fetchKlines({ interval: "5m", limit: 200 }),
         fetchLastPrice(),
         chainlinkPromise,
         fetchPolymarketSnapshot()
@@ -747,4 +746,7 @@ async function main() {
   }
 }
 
-main();
+main().catch(err => {
+  console.error("Fatal error:", err);
+  process.exit(1);
+});

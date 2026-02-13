@@ -13,7 +13,7 @@ export async function scanMarkets() {
     const url = `${CFG.gammaUrl}/markets?active=true&closed=false&enableOrderBook=true&limit=${limit}&offset=${offset}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
     if (!res.ok) break;
-    const batch = await res.json();
+    const batch = await res.json().catch(() => null);
     if (!Array.isArray(batch) || batch.length === 0) break;
     markets.push(...batch);
     if (batch.length < limit) break;
@@ -30,7 +30,8 @@ export async function scanMarkets() {
 export async function fetchBook(tokenId) {
   const res = await fetch(`${CFG.clobUrl}/book?token_id=${tokenId}`, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) return null;
-  const book = await res.json();
+  const book = await res.json().catch(() => null);
+  if (!book) return null;
 
   const bids = book.bids || [];
   const asks = book.asks || [];
@@ -47,17 +48,24 @@ export async function fetchBook(tokenId) {
  * Parse market into tradeable outcomes with prices and token IDs.
  */
 export function parseOutcomes(market) {
-  const outcomes = Array.isArray(market.outcomes)
-    ? market.outcomes
-    : (typeof market.outcomes === "string" ? JSON.parse(market.outcomes) : []);
+  let outcomes, prices, tokenIds;
+  try {
+    outcomes = Array.isArray(market.outcomes)
+      ? market.outcomes
+      : (typeof market.outcomes === "string" ? JSON.parse(market.outcomes) : []);
+  } catch { outcomes = []; }
 
-  const prices = Array.isArray(market.outcomePrices)
-    ? market.outcomePrices.map(Number)
-    : (typeof market.outcomePrices === "string" ? JSON.parse(market.outcomePrices).map(Number) : []);
+  try {
+    prices = Array.isArray(market.outcomePrices)
+      ? market.outcomePrices.map(Number)
+      : (typeof market.outcomePrices === "string" ? JSON.parse(market.outcomePrices).map(Number) : []);
+  } catch { prices = []; }
 
-  const tokenIds = Array.isArray(market.clobTokenIds)
-    ? market.clobTokenIds
-    : (typeof market.clobTokenIds === "string" ? JSON.parse(market.clobTokenIds) : []);
+  try {
+    tokenIds = Array.isArray(market.clobTokenIds)
+      ? market.clobTokenIds
+      : (typeof market.clobTokenIds === "string" ? JSON.parse(market.clobTokenIds) : []);
+  } catch { tokenIds = []; }
 
   const result = [];
   for (let i = 0; i < outcomes.length; i++) {

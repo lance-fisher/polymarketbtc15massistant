@@ -100,7 +100,7 @@ export class Executor {
       // If we can't check spread, proceed with caution
     }
 
-    const usdcToSpend = Math.min(this.maxUsdc, 50);
+    const usdcToSpend = this.maxUsdc;
 
     console.log(`\n[trade] >>> BUY ${side} @ ${(price * 100).toFixed(0)}c for $${usdcToSpend.toFixed(2)}`);
 
@@ -114,6 +114,13 @@ export class Executor {
         usdcAmount: usdcToSpend,
         negRisk: false,
       });
+
+      // Auto-refresh API key on auth failure
+      if (result.status === 401 || result.status === 403 || (result.errorMsg || "").includes("auth")) {
+        console.log("[trade] API key expired — re-deriving…");
+        try { this.creds = await deriveApiKey(this.wallet, CLOB_URL); console.log("[trade] New API key derived"); } catch (e) { console.log(`[trade] Re-derive failed: ${e.message}`); }
+        return;
+      }
 
       if (result.success || result.orderID) {
         const shares = usdcToSpend / price;

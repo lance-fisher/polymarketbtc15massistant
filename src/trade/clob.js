@@ -33,6 +33,7 @@ export async function deriveApiKey(wallet, clobUrl) {
       "POLY-TIMESTAMP": ts,
       "POLY-NONCE":     "0",
     },
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) {
     // Key already exists — derive it
@@ -44,9 +45,10 @@ export async function deriveApiKey(wallet, clobUrl) {
         "POLY-TIMESTAMP": ts,
         "POLY-NONCE":     "0",
       },
+      signal: AbortSignal.timeout(15000),
     });
   }
-  if (!res.ok) throw new Error(`derive-api-key ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`derive-api-key ${res.status}: ${await res.text().catch(() => "")}`);
   return res.json();
 }
 
@@ -155,6 +157,8 @@ export async function placeBuyOrder({ wallet, creds, clobUrl, tokenId, price, us
 
   const path = "/order";
   const hdrs = l2Headers(creds, wallet, "POST", path, body);
-  const res  = await fetch(clobUrl + path, { method: "POST", headers: hdrs, body });
-  return res.json().catch(() => ({ success: false, errorMsg: `HTTP ${res.status}` }));
+  const res  = await fetch(clobUrl + path, { method: "POST", headers: hdrs, body, signal: AbortSignal.timeout(30000) });
+  const json = await res.json().catch(() => ({ success: false, errorMsg: `HTTP ${res.status}` }));
+  json.status = res.status;
+  return json;
 }

@@ -66,13 +66,19 @@ echo.
 
 :loop
 echo   [%time%] Pulling latest code...
-git pull origin %BRANCH% 2>nul
+git pull origin %BRANCH%
+if errorlevel 1 (
+    echo   [warn] Git pull failed — continuing with current code
+)
 
 echo   [%time%] Checking dependencies...
 call npm install --silent 2>nul
 cd /d "%DIR%\copybot" && call npm install --silent 2>nul
 cd /d "%DIR%\autobot" && call npm install --silent 2>nul
 cd /d "%DIR%"
+if errorlevel 1 (
+    echo   [warn] npm install had issues — continuing anyway
+)
 
 if not exist "%DIR%\logs" mkdir "%DIR%\logs"
 

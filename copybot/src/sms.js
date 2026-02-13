@@ -24,6 +24,7 @@ export async function sendSms(message) {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: body.toString(),
+      signal: AbortSignal.timeout(10000),
     });
     const json = await res.json();
     if (json.sid) {

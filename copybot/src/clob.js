@@ -48,7 +48,7 @@ export async function deriveApiKey(wallet) {
       signal: AbortSignal.timeout(15000),
     });
   }
-  if (!res.ok) throw new Error(`derive-api-key ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`derive-api-key ${res.status}: ${await res.text().catch(() => "")}`);
   return res.json();                    // { apiKey, secret, passphrase }
 }
 
