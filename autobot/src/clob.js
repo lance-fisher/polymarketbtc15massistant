@@ -23,11 +23,13 @@ export async function deriveApiKey(wallet) {
   let res = await fetch(`${CFG.clobUrl}/auth/api-key`, {
     method: "POST",
     headers: { "Content-Type":"application/json", "POLY-ADDRESS":wallet.address, "POLY-SIGNATURE":sig, "POLY-TIMESTAMP":ts, "POLY-NONCE":"0" },
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) {
     res = await fetch(`${CFG.clobUrl}/auth/derive-api-key`, {
       method: "GET",
       headers: { "POLY-ADDRESS":wallet.address, "POLY-SIGNATURE":sig, "POLY-TIMESTAMP":ts, "POLY-NONCE":"0" },
+      signal: AbortSignal.timeout(15000),
     });
   }
   if (!res.ok) throw new Error(`derive-api-key ${res.status}: ${await res.text()}`);
@@ -77,6 +79,8 @@ export async function placeBuyOrder({ wallet, creds, tokenId, price, usdcAmount,
     owner: wallet.address, orderType: "FOK",
   });
   const path = "/order";
-  const res = await fetch(CFG.clobUrl + path, { method: "POST", headers: l2Headers(creds, wallet, "POST", path, body), body });
-  return res.json().catch(() => ({ success: false, errorMsg: `HTTP ${res.status}` }));
+  const res = await fetch(CFG.clobUrl + path, { method: "POST", headers: l2Headers(creds, wallet, "POST", path, body), body, signal: AbortSignal.timeout(30000) });
+  const json = await res.json().catch(() => ({ success: false, errorMsg: `HTTP ${res.status}` }));
+  json.status = res.status;
+  return json;
 }

@@ -34,6 +34,7 @@ export async function deriveApiKey(wallet) {
       "POLY-TIMESTAMP": ts,
       "POLY-NONCE":     "0",
     },
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) {
     res = await fetch(`${CFG.clobUrl}/auth/derive-api-key`, {
@@ -44,6 +45,7 @@ export async function deriveApiKey(wallet) {
         "POLY-TIMESTAMP": ts,
         "POLY-NONCE":     "0",
       },
+      signal: AbortSignal.timeout(15000),
     });
   }
   if (!res.ok) throw new Error(`derive-api-key ${res.status}: ${await res.text()}`);
@@ -170,15 +172,16 @@ export async function placeOrder({ wallet, creds, side, tokenId, price, amount, 
 
   const path = "/order";
   const hdrs = l2Headers(creds, wallet, "POST", path, body);
-  const res  = await fetch(CFG.clobUrl + path, { method: "POST", headers: hdrs, body });
+  const res  = await fetch(CFG.clobUrl + path, { method: "POST", headers: hdrs, body, signal: AbortSignal.timeout(30000) });
   const json = await res.json().catch(() => ({ success: false, errorMsg: `HTTP ${res.status}` }));
+  json.status = res.status;
   return json;
 }
 
 /* ─── Price helpers ────────────────────────────────────────── */
 
 export async function getBookPrice(tokenId, side = "BUY") {
-  const res = await fetch(`${CFG.clobUrl}/book?token_id=${tokenId}`);
+  const res = await fetch(`${CFG.clobUrl}/book?token_id=${tokenId}`, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) return null;
   const book = await res.json();
   if (side === "BUY") {

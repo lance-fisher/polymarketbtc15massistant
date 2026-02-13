@@ -16,7 +16,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { ethers } from "ethers";
 import { CFG } from "./config.js";
 import { deriveApiKey, placeBuyOrder } from "./clob.js";
-import { scanMarkets } from "./scanner.js";
+import { scanMarkets, fetchBook } from "./scanner.js";
 import { rankOpportunities } from "./strategy.js";
 
 const STATE_FILE = new URL("../../autobot-state.json", import.meta.url).pathname;
@@ -134,12 +134,17 @@ async function main() {
             break;
           }
 
-          // ── Guard: spread check ──
-          const spreadCents = opp.spread != null ? Math.round(opp.spread * 100) : null;
-          if (spreadCents != null && spreadCents > CFG.maxSpreadCents) {
-            console.log(`[trade] Skip "${(opp.market.question || "").slice(0, 40)}" — spread ${spreadCents}c > ${CFG.maxSpreadCents}c`);
-            continue;
-          }
+          // ── Guard: spread check (fetch actual book) ──
+          try {
+            const book = await fetchBook(opp.tokenId);
+            if (book && book.bestAsk != null && book.bestBid != null) {
+              const spreadCents = Math.round((book.bestAsk - book.bestBid) * 100);
+              if (spreadCents > CFG.maxSpreadCents) {
+                console.log(`[trade] Skip "${(opp.market.question || "").slice(0, 40)}" — spread ${spreadCents}c > ${CFG.maxSpreadCents}c`);
+                continue;
+              }
+            }
+          } catch { /* book fetch failed, proceed with caution */ }
 
           const usdcToSpend = Math.min(CFG.maxTradeUsdc, budgetLeft - (traded * CFG.maxTradeUsdc));
           if (usdcToSpend < 1) break;
@@ -155,6 +160,13 @@ async function main() {
             usdcAmount: usdcToSpend,
             negRisk: opp.market.negRisk,
           });
+
+          // Auto-refresh API key on auth failure
+          if (result.status === 401 || result.status === 403 || (result.errorMsg || "").includes("auth")) {
+            console.log("[auth] API key expired — re-deriving…");
+            try { creds = await deriveApiKey(wallet); console.log("[auth] New API key derived"); } catch (e) { console.log(`[auth] Re-derive failed: ${e.message}`); }
+            break;
+          }
 
           if (result.success || result.orderID) {
             const shares = usdcToSpend / opp.price;

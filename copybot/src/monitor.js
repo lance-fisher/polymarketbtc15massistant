@@ -1,11 +1,13 @@
 import { CFG } from "./config.js";
 
+const TIMEOUT = 20000;
+
 /* ─── Resolve username → proxy wallet address ──────────────── */
 
 export async function resolveAddress(username) {
-  // Try gamma public-search first
   const res = await fetch(
-    `${CFG.gammaUrl}/public-search?query=${encodeURIComponent(username)}`
+    `${CFG.gammaUrl}/public-search?query=${encodeURIComponent(username)}`,
+    { signal: AbortSignal.timeout(TIMEOUT) }
   );
   if (res.ok) {
     const data = await res.json();
@@ -16,9 +18,9 @@ export async function resolveAddress(username) {
     }
   }
 
-  // Fallback: try data-api profile endpoint
   const res2 = await fetch(
-    `${CFG.dataUrl}/profile?username=${encodeURIComponent(username)}`
+    `${CFG.dataUrl}/profile?username=${encodeURIComponent(username)}`,
+    { signal: AbortSignal.timeout(TIMEOUT) }
   );
   if (res2.ok) {
     const p = await res2.json();
@@ -33,9 +35,9 @@ export async function resolveAddress(username) {
 
 export async function fetchPositions(address) {
   const url = `${CFG.dataUrl}/positions?user=${address}&sortBy=CURRENT&sortDirection=DESC&sizeThreshold=0.1&limit=200`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT) });
   if (!res.ok) throw new Error(`positions ${res.status}`);
-  return res.json();   // array of position objects
+  return res.json();
 }
 
 /* ─── Fetch recent trade activity ──────────────────────────── */
@@ -43,7 +45,7 @@ export async function fetchPositions(address) {
 export async function fetchActivity(address, sinceTs = 0) {
   let url = `${CFG.dataUrl}/activity?user=${address}&type=TRADE&sortBy=TIMESTAMP&sortDirection=DESC&limit=50`;
   if (sinceTs) url += `&start=${sinceTs}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT) });
   if (!res.ok) throw new Error(`activity ${res.status}`);
   return res.json();
 }
@@ -56,7 +58,8 @@ export async function fetchMarketInfo(conditionId) {
   if (marketCache.has(conditionId)) return marketCache.get(conditionId);
 
   const res = await fetch(
-    `${CFG.gammaUrl}/markets?condition_id=${conditionId}&limit=1`
+    `${CFG.gammaUrl}/markets?condition_id=${conditionId}&limit=1`,
+    { signal: AbortSignal.timeout(TIMEOUT) }
   );
   if (!res.ok) return null;
   const data = await res.json();

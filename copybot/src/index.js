@@ -115,8 +115,6 @@ async function main() {
   let totalProfit = state.pnl.reduce((s, e) => s + e.profit, 0);
 
   // ── First-run catch-up protection ──
-  // Snapshot the target's current positions so we don't blindly enter them all.
-  // We only copy NEW positions that appear AFTER the bot starts.
   let baselineKeys = new Set();
   if (copiedKeys.size === 0) {
     try {
@@ -160,46 +158,36 @@ async function main() {
       // 4. Copy new entries (with all safeguards)
       let newThisCycle = 0;
       for (const pos of toEnter) {
+        try {
         const key = pos.conditionId + "_" + pos.asset;
         const title = pos.title || pos.slug || pos.conditionId.slice(0, 12);
         const outcome = pos.outcome || "?";
 
-        // ── Guard: first-run catch-up ──
         if (baselineKeys.has(key)) {
           log("skip", `${title} (${outcome}) – pre-existing position (catch-up protection)`);
           continue;
         }
-
-        // ── Guard: max new entries per cycle ──
         if (newThisCycle >= CFG.maxNewPerCycle) {
           log("skip", `${title} – max ${CFG.maxNewPerCycle} new entries per cycle reached`);
           break;
         }
-
-        // ── Guard: max positions ──
         if (currentPositions + newThisCycle >= CFG.maxPositions) {
           log("skip", `${title} – at position limit (${CFG.maxPositions})`);
           break;
         }
-
-        // ── Guard: portfolio cap ──
         const spent = currentExposure + (newThisCycle * CFG.maxTradeUsdc);
         if (spent + CFG.maxTradeUsdc > CFG.maxPortfolioUsdc) {
           log("skip", `${title} – portfolio cap ($${CFG.maxPortfolioUsdc}) would be exceeded`);
           break;
         }
-
-        // ── Guard: daily spending cap ──
         if (state.dailySpent + CFG.maxTradeUsdc > CFG.maxDailyUsdc) {
           log("skip", `${title} – daily spending cap ($${CFG.maxDailyUsdc}) reached`);
           break;
         }
 
-        // Lookup market for negRisk flag
         const mkt = await fetchMarketInfo(pos.conditionId);
         const negRisk = mkt?.negRisk ?? false;
 
-        // ── Guard: spread check ──
         const buyPrice = await getBookPrice(pos.asset, "BUY");
         const sellPrice = await getBookPrice(pos.asset, "SELL");
         if (!buyPrice || buyPrice <= 0 || buyPrice >= 1) {
@@ -226,6 +214,13 @@ async function main() {
           negRisk,
         });
 
+        // Auto-refresh API key on auth failure
+        if (result.status === 401 || result.status === 403 || (result.errorMsg || "").includes("auth")) {
+          log("auth", "API key expired — re-deriving…");
+          try { creds = await deriveApiKey(wallet); log("auth", "New API key derived"); } catch (e) { log("auth", `Re-derive failed: ${e.message}`); }
+          break;
+        }
+
         if (result.success || result.orderID) {
           log("fill", `Order ${result.orderID || "ok"} – ${title} (${outcome})`);
           state.copied[key] = {
@@ -247,10 +242,12 @@ async function main() {
         }
 
         await sleep(500);
+        } catch (e) { log("err", `Entry error: ${e.message}`); }
       }
 
       // 5. Exit positions target no longer holds
       for (const key of toExit) {
+        try {
         const entry = state.copied[key];
         if (!entry) continue;
 
@@ -271,29 +268,35 @@ async function main() {
           negRisk: entry.negRisk ?? false,
         });
 
-        const revenue = entry.shares * price;
-        const profit  = revenue - entry.costUsdc;
-        totalProfit  += profit;
+        // Only record P&L if sell actually succeeded
+        if (result.success || result.orderID) {
+          const revenue = entry.shares * price;
+          const profit  = revenue - entry.costUsdc;
+          totalProfit  += profit;
 
-        state.pnl.push({ title: entry.title, outcome: entry.outcome, profit, ts: Date.now() });
-        delete state.copied[key];
-        copiedKeys.delete(key);
-        saveState(state);
+          state.pnl.push({ title: entry.title, outcome: entry.outcome, profit, ts: Date.now() });
+          delete state.copied[key];
+          copiedKeys.delete(key);
+          saveState(state);
 
-        const profitStr = profit >= 0 ? `+$${profit.toFixed(2)}` : `-$${Math.abs(profit).toFixed(2)}`;
-        log("pnl", `${entry.title}: ${profitStr}`);
+          const profitStr = profit >= 0 ? `+$${profit.toFixed(2)}` : `-$${Math.abs(profit).toFixed(2)}`;
+          log("pnl", `${entry.title}: ${profitStr}`);
 
-        if (profit > 0) {
-          await sendSms(
-            `Polymarket profit!\n` +
-            `Market: ${entry.title}\n` +
-            `Outcome: ${entry.outcome}\n` +
-            `Profit: ${profitStr}\n` +
-            `Total P&L: $${totalProfit.toFixed(2)}`
-          );
+          if (profit > 0) {
+            await sendSms(
+              `Polymarket profit!\n` +
+              `Market: ${entry.title}\n` +
+              `Outcome: ${entry.outcome}\n` +
+              `Profit: ${profitStr}\n` +
+              `Total P&L: $${totalProfit.toFixed(2)}`
+            );
+          }
+        } else {
+          log("err", `Sell failed for ${entry.title}: ${result.errorMsg || JSON.stringify(result)} — keeping position`);
         }
 
         await sleep(500);
+        } catch (e) { log("err", `Exit error (${key}): ${e.message}`); }
       }
 
       // 6. Check current value of held positions
@@ -324,7 +327,7 @@ async function main() {
 
     } catch (err) {
       log("err", err.message);
-      await sleep(5000);  // back off on errors
+      await sleep(5000);
     }
 
     await sleep(CFG.pollIntervalS * 1000);

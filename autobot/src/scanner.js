@@ -11,7 +11,7 @@ export async function scanMarkets() {
   // Paginate through all active markets
   while (true) {
     const url = `${CFG.gammaUrl}/markets?active=true&closed=false&enableOrderBook=true&limit=${limit}&offset=${offset}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
     if (!res.ok) break;
     const batch = await res.json();
     if (!Array.isArray(batch) || batch.length === 0) break;
@@ -28,7 +28,7 @@ export async function scanMarkets() {
  * Fetch order book summary for a token.
  */
 export async function fetchBook(tokenId) {
-  const res = await fetch(`${CFG.clobUrl}/book?token_id=${tokenId}`);
+  const res = await fetch(`${CFG.clobUrl}/book?token_id=${tokenId}`, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) return null;
   const book = await res.json();
 
