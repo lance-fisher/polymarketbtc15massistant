@@ -7,12 +7,12 @@ export const CFG = {
   targetUsername:  e.TARGET_USERNAME || "anoin123",
   targetAddress:   e.TARGET_ADDRESS || "",
 
-  maxTradeUsdc:    Number(e.MAX_TRADE_USDC) || 10,
-  maxPortfolioUsdc: Number(e.MAX_PORTFOLIO_USDC) || 50,
-  maxPositions:    Number(e.MAX_POSITIONS) || 5,
-  maxDailyUsdc:    Number(e.MAX_DAILY_USDC) || 30,
-  maxSpreadCents:  Number(e.MAX_SPREAD_CENTS) || 8,
-  maxNewPerCycle:  Number(e.MAX_NEW_PER_CYCLE) || 2,
+  maxTradeUsdc:    Number(e.MAX_TRADE_USDC) || 5,
+  maxPortfolioUsdc: Number(e.MAX_PORTFOLIO_USDC) || 15,
+  maxPositions:    Number(e.MAX_POSITIONS) || 3,
+  maxDailyUsdc:    Number(e.MAX_DAILY_USDC) || 10,
+  maxSpreadCents:  Number(e.MAX_SPREAD_CENTS) || 5,
+  maxNewPerCycle:  Number(e.MAX_NEW_PER_CYCLE) || 1,
   pollIntervalS:   Number(e.POLL_INTERVAL_S) || 30,
 
   twilio: {

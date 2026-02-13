@@ -71,9 +71,9 @@ RPC="https://polygon-bor-rpc.publicnode.com"
 cat > "$DIR/.env" << EOF
 PRIVATE_KEY=$KEY_SIGNAL
 POLYGON_RPC_URL=$RPC
-MAX_TRADE_USDC=10
-MAX_DAILY_USDC=30
-MAX_SPREAD_CENTS=8
+MAX_TRADE_USDC=5
+MAX_DAILY_USDC=10
+MAX_SPREAD_CENTS=5
 EOF
 
 cat > "$DIR/copybot/.env" << EOF
@@ -81,26 +81,26 @@ PRIVATE_KEY=$KEY_COPY
 POLYGON_RPC_URL=$RPC
 TARGET_USERNAME=anoin123
 TARGET_ADDRESS=0xEd5f13e3373079F62E3c5fce82D1e6263B063a3c
-MAX_TRADE_USDC=10
-MAX_PORTFOLIO_USDC=50
-MAX_POSITIONS=5
-MAX_DAILY_USDC=30
-MAX_SPREAD_CENTS=8
-MAX_NEW_PER_CYCLE=2
+MAX_TRADE_USDC=5
+MAX_PORTFOLIO_USDC=15
+MAX_POSITIONS=3
+MAX_DAILY_USDC=10
+MAX_SPREAD_CENTS=5
+MAX_NEW_PER_CYCLE=1
 POLL_INTERVAL_S=30
 EOF
 
 cat > "$DIR/autobot/.env" << EOF
 PRIVATE_KEY=$KEY_AUTO
 POLYGON_RPC_URL=$RPC
-MAX_TRADE_USDC=10
-MAX_PORTFOLIO_USDC=50
-MAX_POSITIONS=5
-MAX_DAILY_USDC=30
-MAX_SPREAD_CENTS=8
+MAX_TRADE_USDC=5
+MAX_PORTFOLIO_USDC=15
+MAX_POSITIONS=3
+MAX_DAILY_USDC=10
+MAX_SPREAD_CENTS=5
 SCAN_INTERVAL_S=60
-MIN_EDGE=0.08
-MIN_LIQUIDITY=1000
+MIN_EDGE=0.12
+MIN_LIQUIDITY=5000
 EOF
 
 echo "[ok] .env files written"
@@ -162,13 +162,14 @@ echo "  Signal:  0x5eD48e29dcd952955d7E4fccC3616EFA38cD75a5"
 echo "  Copy:    0xf35803f093BBceaBEb9A6abd3d4c99856BDdA40C"
 echo "  Auto:    0xf17Cb352380Fd5503742c5A0573cDE4c656d8486"
 echo ""
-echo "  Safeguards (all 3 bots):"
-echo "  ────────────────────────"
-echo "  Per trade:      \$10 max"
-echo "  Portfolio cap:  \$50 max exposure"
-echo "  Position cap:   5 max concurrent"
-echo "  Daily cap:      \$30/day (resets midnight ET)"
-echo "  Spread guard:   8c max spread"
+echo "  Safeguards (tuned for \$20 wallets):"
+echo "  ─────────────────────────────────────"
+echo "  Per trade:      \$5 max"
+echo "  Portfolio cap:  \$15 max exposure"
+echo "  Position cap:   3 max concurrent"
+echo "  Daily cap:      \$10/day (resets midnight ET)"
+echo "  Spread guard:   5c max"
+echo "  Autobot edge:   12% min (high-conviction only)"
 echo ""
 echo "  Installed at: $DIR"
 echo ""

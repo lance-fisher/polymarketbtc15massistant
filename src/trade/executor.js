@@ -26,8 +26,8 @@ export class Executor {
     this.totalPnl    = 0;
     this.dailySpent  = 0;
     this.dailyResetDate = "";
-    this.maxDailyUsdc = Number(process.env.MAX_DAILY_USDC) || 30;
-    this.maxSpreadCents = Number(process.env.MAX_SPREAD_CENTS) || 8;
+    this.maxDailyUsdc = Number(process.env.MAX_DAILY_USDC) || 10;
+    this.maxSpreadCents = Number(process.env.MAX_SPREAD_CENTS) || 5;
   }
 
   _todayET() {
@@ -49,7 +49,7 @@ export class Executor {
       return;
     }
 
-    const maxUsdc = Number(process.env.MAX_TRADE_USDC) || 10;
+    const maxUsdc = Number(process.env.MAX_TRADE_USDC) || 5;
     this.maxUsdc = maxUsdc;
 
     this.wallet = new ethers.Wallet(pk);
