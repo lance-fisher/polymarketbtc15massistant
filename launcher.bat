@@ -36,10 +36,10 @@ if not exist "%DIR%\.git" (
     cd /d "%DIR%\autobot" && call npm install --silent 2>nul
     cd /d "%DIR%"
 
-    :: Run start.bat for .env setup + approvals if it exists
-    if exist "%DIR%\start.bat" (
+    :: Run setup.bat for .env setup + approvals if it exists
+    if exist "%DIR%\setup.bat" (
         echo   Running first-time setup...
-        call "%DIR%\start.bat"
+        call "%DIR%\setup.bat"
         exit /b
     )
 )

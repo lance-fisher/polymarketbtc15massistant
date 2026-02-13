@@ -2,7 +2,7 @@
 #  POLYMARKET TRADING SUITE (PowerShell)
 #
 #  Run from any terminal:
-#    powershell -ExecutionPolicy Bypass -File start.ps1
+#    powershell -ExecutionPolicy Bypass -File setup.ps1
 # ═══════════════════════════════════════════════════════
 
 $ErrorActionPreference = "Stop"
@@ -152,7 +152,7 @@ Write-Host "  [shortcut] Creating desktop shortcut..."
 try {
     $ws = New-Object -ComObject WScript.Shell
     $s = $ws.CreateShortcut("$env:USERPROFILE\Desktop\Polymarket Bots.lnk")
-    $s.TargetPath = "$DIR\start.bat"
+    $s.TargetPath = "$DIR\launcher.bat"
     $s.WorkingDirectory = $DIR
     $s.IconLocation = "shell32.dll,21"
     $s.Description = "Launch Polymarket Trading Suite"
