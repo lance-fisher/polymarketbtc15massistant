@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "node --env-file=.env src/index.js"
+    "start": "node src/index.js",
+    "dashboard": "node dashboard.js"
   },
   "dependencies": {
     "ethers": "^6.11.1",

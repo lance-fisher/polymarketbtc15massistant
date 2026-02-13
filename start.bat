@@ -1,20 +1,30 @@
 @echo off
 setlocal enabledelayedexpansion
-title Polymarket 3-Bot Launcher
+title Polymarket Trading Suite
+color 0B
 
 echo.
-echo   ╔══════════════════════════════════════════╗
-echo   ║  POLYMARKET 3-BOT LAUNCHER               ║
-echo   ╚══════════════════════════════════════════╝
+echo   ╔══════════════════════════════════════════════════════╗
+echo   ║       POLYMARKET TRADING SUITE - LAUNCHER            ║
+echo   ║       Signal Bot + Copy Bot + Auto Bot               ║
+echo   ╚══════════════════════════════════════════════════════╝
 echo.
 
 :: ── Check prerequisites ──
-where node >nul 2>&1 || (echo [ERROR] Node.js not found. Install from https://nodejs.org & pause & exit /b 1)
-where git >nul 2>&1  || (echo [ERROR] Git not found. Install from https://git-scm.com & pause & exit /b 1)
+where node >nul 2>&1 || (
+    echo   [ERROR] Node.js not found!
+    echo   Download: https://nodejs.org
+    pause & exit /b 1
+)
+where git >nul 2>&1 || (
+    echo   [ERROR] Git not found!
+    echo   Download: https://git-scm.com
+    pause & exit /b 1
+)
 
 for /f "tokens=1 delims=." %%v in ('node -v') do set NODE_V=%%v
 set NODE_V=%NODE_V:v=%
-echo [ok] Node v%NODE_V%
+echo   [ok] Node v%NODE_V%
 
 :: ── Install directory ──
 set "REPO=https://github.com/lance-fisher/polymarketbtc15massistant.git"
@@ -28,20 +38,21 @@ if exist "D:\ProjectsHome" (
 
 :: ── Clone or pull ──
 if exist "%DIR%\.git" (
-    echo [ok] Repo exists at %DIR% - pulling latest...
+    echo   [ok] Repo at %DIR% - pulling latest...
     cd /d "%DIR%"
     git pull origin %BRANCH% 2>nul
 ) else (
-    echo [clone] Cloning to %DIR% ...
+    echo   [clone] Cloning to %DIR% ...
     git clone -b %BRANCH% %REPO% "%DIR%"
 )
 cd /d "%DIR%"
 
 :: ── Kill old bot processes ──
-echo [cleanup] Stopping any running bots...
-taskkill /F /FI "WINDOWTITLE eq CopyBot*"  2>nul
-taskkill /F /FI "WINDOWTITLE eq SignalBot*" 2>nul
-taskkill /F /FI "WINDOWTITLE eq AutoBot*"   2>nul
+echo   [cleanup] Stopping any running bots...
+taskkill /F /FI "WINDOWTITLE eq CopyBot*"   2>nul >nul
+taskkill /F /FI "WINDOWTITLE eq SignalBot*"  2>nul >nul
+taskkill /F /FI "WINDOWTITLE eq AutoBot*"    2>nul >nul
+taskkill /F /FI "WINDOWTITLE eq Dashboard*"  2>nul >nul
 timeout /t 1 /nobreak >nul
 
 :: ═══════════════════════════════════════════════════════
@@ -91,84 +102,78 @@ echo MIN_EDGE=0.12
 echo MIN_LIQUIDITY=5000
 ) > "%DIR%\autobot\.env"
 
-echo [ok] .env files written
+echo   [ok] .env files written
 
 :: ── Install deps ──
-echo [npm] Installing dependencies...
+echo   [npm] Installing dependencies...
 cd /d "%DIR%"         && call npm install --silent 2>nul
 cd /d "%DIR%\copybot" && call npm install --silent 2>nul
 cd /d "%DIR%\autobot" && call npm install --silent 2>nul
 cd /d "%DIR%"
-echo [ok] Dependencies installed
+echo   [ok] Dependencies ready
 
-:: ── Approvals ──
+:: ── Run approvals (need MATIC for gas) ──
 echo.
-echo [approve] Setting on-chain approvals (needs MATIC for gas)...
-cd /d "%DIR%\copybot" && (
-    for /f "usebackq tokens=1,2 delims==" %%a in (".env") do set "%%a=%%b"
-    node src\approve.js 2>&1
-) || echo   Copy Bot approval skipped
-timeout /t 3 /nobreak >nul
-cd /d "%DIR%\autobot" && (
-    for /f "usebackq tokens=1,2 delims==" %%a in (".env") do set "%%a=%%b"
-    node src\approve.js 2>&1
-) || echo   Auto Bot approval skipped
+echo   [approve] Setting on-chain approvals...
+echo   (needs MATIC/POL in each wallet for gas)
+echo.
+
+cd /d "%DIR%\copybot"
+node src\approve.js 2>&1 || echo   Copy Bot approval skipped (need MATIC?)
+timeout /t 2 /nobreak >nul
+
+cd /d "%DIR%\autobot"
+node src\approve.js 2>&1 || echo   Auto Bot approval skipped (need MATIC?)
 cd /d "%DIR%"
 
 :: ── Create logs dir ──
 if not exist "%DIR%\logs" mkdir "%DIR%\logs"
 
 :: ═══════════════════════════════════════════════════════
-::  LAUNCH ALL 3 BOTS (each in its own window)
+::  LAUNCH ALL 3 BOTS (background windows)
 :: ═══════════════════════════════════════════════════════
 echo.
-echo ═══════════════════════════════════════════
-echo   LAUNCHING ALL 3 BOTS
-echo ═══════════════════════════════════════════
+echo   ═══════════════════════════════════════════
+echo     LAUNCHING ALL 3 BOTS + DASHBOARD
+echo   ═══════════════════════════════════════════
 echo.
 
-:: Bot 1: Copy Bot
-start "CopyBot" /min cmd /c "cd /d "%DIR%\copybot" && for /f "usebackq tokens=1,2 delims==" %%a in (".env") do @set "%%a=%%b" && node src\index.js >> "%DIR%\logs\copybot.log" 2>&1"
-echo   [1] Copy Bot (@anoin123)   STARTED
+:: Bot 1: Copy Bot (minimized)
+start "CopyBot" /min cmd /c "cd /d "%DIR%\copybot" && node src\index.js >> "%DIR%\logs\copybot.log" 2>&1"
+echo   [1/3] Copy Bot (@anoin123)     STARTED
 
-:: Bot 2: Signal Bot
-start "SignalBot" /min cmd /c "cd /d "%DIR%" && for /f "usebackq tokens=1,2 delims==" %%a in (".env") do @set "%%a=%%b" && node src\index.js >> "%DIR%\logs\signal.log" 2>&1"
-echo   [2] Signal Bot (BTC 15m)   STARTED
+:: Bot 2: Signal Bot (minimized)
+start "SignalBot" /min cmd /c "cd /d "%DIR%" && node src\index.js >> "%DIR%\logs\signal.log" 2>&1"
+echo   [2/3] Signal Bot (BTC 15m)     STARTED
 
-:: Bot 3: Autonomous Bot
-start "AutoBot" /min cmd /c "cd /d "%DIR%\autobot" && for /f "usebackq tokens=1,2 delims==" %%a in (".env") do @set "%%a=%%b" && node src\index.js >> "%DIR%\logs\autobot.log" 2>&1"
-echo   [3] Autonomous Bot         STARTED
+:: Bot 3: Autonomous Bot (minimized)
+start "AutoBot" /min cmd /c "cd /d "%DIR%\autobot" && node src\index.js >> "%DIR%\logs\autobot.log" 2>&1"
+echo   [3/3] Autonomous Bot           STARTED
 
 echo.
-echo   Wallets:
-echo   ────────
-echo   Signal:  0x5eD48e29dcd952955d7E4fccC3616EFA38cD75a5
-echo   Copy:    0xf35803f093BBceaBEb9A6abd3d4c99856BDdA40C
-echo   Auto:    0xf17Cb352380Fd5503742c5A0573cDE4c656d8486
+echo   All bots launched in background windows.
 echo.
-echo   Safeguards (tuned for $20 wallets):
-echo   ─────────────────────────────────────
-echo   Per trade:      $5 max
-echo   Portfolio cap:  $15 max exposure
-echo   Position cap:   3 max concurrent
-echo   Daily cap:      $10/day (resets midnight ET)
-echo   Spread guard:   5c max (tighter = less slippage loss)
-echo   Autobot edge:   12%% min (only high-conviction plays)
+
+:: ── Create desktop shortcut ──
+echo   [shortcut] Creating desktop shortcut...
+set "SHORTCUT=%USERPROFILE%\Desktop\Polymarket Bots.lnk"
+powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%DIR%\start.bat'; $s.WorkingDirectory = '%DIR%'; $s.IconLocation = 'shell32.dll,21'; $s.Description = 'Launch Polymarket Trading Suite'; $s.Save()" 2>nul
+if exist "%SHORTCUT%" (
+    echo   [ok] Desktop shortcut created: "Polymarket Bots"
+) else (
+    echo   [skip] Could not create shortcut
+)
+
 echo.
-echo   Logs: %DIR%\logs\
+echo   ═══════════════════════════════════════════
+echo     Opening Dashboard...
+echo   ═══════════════════════════════════════════
 echo.
-echo   To watch live:
-echo     type %DIR%\logs\copybot.log
-echo     type %DIR%\logs\signal.log
-echo     type %DIR%\logs\autobot.log
-echo.
-echo   To stop all bots:
-echo     taskkill /F /FI "WINDOWTITLE eq CopyBot*"
-echo     taskkill /F /FI "WINDOWTITLE eq SignalBot*"
-echo     taskkill /F /FI "WINDOWTITLE eq AutoBot*"
-echo.
-echo ═══════════════════════════════════════════
-echo   ALL BOTS RUNNING — this window can close
-echo ═══════════════════════════════════════════
-echo.
-pause
+
+:: Give bots 3 seconds to start writing logs
+timeout /t 3 /nobreak >nul
+
+:: Launch dashboard in THIS window (user sees it)
+title Polymarket Dashboard
+cd /d "%DIR%"
+node dashboard.js

@@ -184,8 +184,10 @@ echo "════════════════════════�
 cleanup() { kill $P1 $P2 $P3 2>/dev/null; echo "Stopped."; exit 0; }
 trap cleanup INT TERM
 
-# Stream all logs to terminal
-tail -f "$DIR/logs/copybot.log" "$DIR/logs/signal.log" "$DIR/logs/autobot.log" 2>/dev/null &
-TP=$!
-trap "kill $P1 $P2 $P3 $TP 2>/dev/null; exit 0" INT TERM
-wait
+# Launch dashboard (foreground)
+echo ""
+echo "  Opening Dashboard..."
+echo ""
+sleep 3
+trap "kill $P1 $P2 $P3 2>/dev/null; exit 0" INT TERM
+node "$DIR/dashboard.js"

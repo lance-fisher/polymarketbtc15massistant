@@ -1,3 +1,16 @@
+// Auto-load .env (works on any Node version, no --env-file needed)
+import { readFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+const __dir = dirname(fileURLToPath(import.meta.url));
+const __envPath = join(__dir, "..", ".env");
+if (existsSync(__envPath)) {
+  for (const line of readFileSync(__envPath, "utf8").split("\n")) {
+    const m = line.match(/^([^#\s][^=]*)=(.*)$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].trim();
+  }
+}
+
 export const CONFIG = {
   symbol: "BTCUSDT",
   binanceBaseUrl: "https://api.binance.us",

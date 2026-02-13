@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════
-#  POLYMARKET 3-BOT LAUNCHER (PowerShell)
+#  POLYMARKET TRADING SUITE (PowerShell)
 #
 #  Run from any terminal:
 #    powershell -ExecutionPolicy Bypass -File start.ps1
@@ -8,19 +8,20 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "  ║  POLYMARKET 3-BOT LAUNCHER               ║" -ForegroundColor Cyan
-Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "  ╔══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+Write-Host "  ║       POLYMARKET TRADING SUITE - LAUNCHER            ║" -ForegroundColor Cyan
+Write-Host "  ║       Signal Bot + Copy Bot + Auto Bot               ║" -ForegroundColor Cyan
+Write-Host "  ╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
 # ── Check prerequisites ──
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Node.js not found. Install: https://nodejs.org" -ForegroundColor Red; exit 1
+    Write-Host "  [ERROR] Node.js not found! Download: https://nodejs.org" -ForegroundColor Red; exit 1
 }
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Git not found. Install: https://git-scm.com" -ForegroundColor Red; exit 1
+    Write-Host "  [ERROR] Git not found! Download: https://git-scm.com" -ForegroundColor Red; exit 1
 }
-Write-Host "[ok] Node $(node -v)"
+Write-Host "  [ok] Node $(node -v)"
 
 # ── Config ──
 $REPO   = "https://github.com/lance-fisher/polymarketbtc15massistant.git"
@@ -34,19 +35,19 @@ if (Test-Path "D:\ProjectsHome") {
 
 # ── Clone or pull ──
 if (Test-Path "$DIR\.git") {
-    Write-Host "[ok] Repo exists at $DIR - pulling latest..."
+    Write-Host "  [ok] Repo at $DIR - pulling latest..."
     Push-Location $DIR
     git pull origin $BRANCH 2>$null
     Pop-Location
 } else {
-    Write-Host "[clone] Cloning to $DIR..."
+    Write-Host "  [clone] Cloning to $DIR..."
     git clone -b $BRANCH $REPO $DIR
 }
 
 # ── Kill old bots ──
-Write-Host "[cleanup] Stopping old bots..."
+Write-Host "  [cleanup] Stopping old bots..."
 Get-Process node -ErrorAction SilentlyContinue | Where-Object {
-    $_.MainWindowTitle -match "CopyBot|SignalBot|AutoBot"
+    $_.MainWindowTitle -match "CopyBot|SignalBot|AutoBot|Dashboard"
 } | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep 1
 
@@ -97,40 +98,27 @@ MIN_EDGE=0.12
 MIN_LIQUIDITY=5000
 "@ | Set-Content "$DIR\autobot\.env" -Encoding ASCII
 
-Write-Host "[ok] .env files written"
+Write-Host "  [ok] .env files written"
 
 # ── Install deps ──
-Write-Host "[npm] Installing dependencies..."
-Push-Location $DIR;         npm install --silent 2>$null; Pop-Location
+Write-Host "  [npm] Installing dependencies..."
+Push-Location $DIR;           npm install --silent 2>$null; Pop-Location
 Push-Location "$DIR\copybot"; npm install --silent 2>$null; Pop-Location
 Push-Location "$DIR\autobot"; npm install --silent 2>$null; Pop-Location
-Write-Host "[ok] Dependencies installed"
+Write-Host "  [ok] Dependencies ready"
 
 # ── Approvals ──
 Write-Host ""
-Write-Host "[approve] Setting on-chain approvals (needs MATIC for gas)..."
-
-function Load-EnvAndRun($envFile, $script) {
-    $envVars = @{}
-    Get-Content $envFile | ForEach-Object {
-        if ($_ -match '^([^#]\S+)=(.+)$') {
-            $envVars[$Matches[1]] = $Matches[2]
-        }
-    }
-    $envBlock = $envVars.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
-    foreach ($kv in $envVars.GetEnumerator()) {
-        [Environment]::SetEnvironmentVariable($kv.Key, $kv.Value, "Process")
-    }
-    node $script 2>&1
-}
+Write-Host "  [approve] Setting on-chain approvals..."
+Write-Host "  (needs MATIC/POL in each wallet for gas)"
 
 Push-Location "$DIR\copybot"
-try { Load-EnvAndRun ".env" "src\approve.js" } catch { Write-Host "  Copy Bot approval skipped" }
+try { node src\approve.js 2>&1 } catch { Write-Host "  Copy Bot approval skipped" }
 Pop-Location
-Start-Sleep 3
+Start-Sleep 2
 
 Push-Location "$DIR\autobot"
-try { Load-EnvAndRun ".env" "src\approve.js" } catch { Write-Host "  Auto Bot approval skipped" }
+try { node src\approve.js 2>&1 } catch { Write-Host "  Auto Bot approval skipped" }
 Pop-Location
 
 # ── Logs dir ──
@@ -140,52 +128,50 @@ New-Item -ItemType Directory -Path "$DIR\logs" -Force | Out-Null
 #  LAUNCH ALL 3 BOTS
 # ═══════════════════════════════════════════════════════
 Write-Host ""
-Write-Host "═══════════════════════════════════════════" -ForegroundColor Green
-Write-Host "  LAUNCHING ALL 3 BOTS" -ForegroundColor Green
-Write-Host "═══════════════════════════════════════════" -ForegroundColor Green
+Write-Host "  ═══════════════════════════════════════════" -ForegroundColor Green
+Write-Host "    LAUNCHING ALL 3 BOTS + DASHBOARD" -ForegroundColor Green
+Write-Host "  ═══════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
 
-# Helper: launch a bot in a background job with env vars
-function Start-Bot($name, $workDir, $envFile, $script, $logFile) {
-    $envText = Get-Content "$workDir\$envFile" -Raw
-    $cmd = "cd '$workDir'; `$lines = @'`n$envText`n'@ -split '`n'; foreach (`$l in `$lines) { if (`$l -match '^([^#]\S+)=(.+)$') { [Environment]::SetEnvironmentVariable(`$Matches[1], `$Matches[2], 'Process') } }; node $script *>> '$logFile'"
-    Start-Process powershell -ArgumentList "-WindowStyle Hidden -Command $cmd" -WindowStyle Hidden
-    Write-Host "  [$name] STARTED" -ForegroundColor Green
+# Launch bots as hidden background processes
+Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "src\index.js" -WorkingDirectory "$DIR\copybot" -RedirectStandardOutput "$DIR\logs\copybot.log" -RedirectStandardError "$DIR\logs\copybot-err.log"
+Write-Host "  [1/3] Copy Bot (@anoin123)     STARTED" -ForegroundColor Green
+
+Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "src\index.js" -WorkingDirectory "$DIR" -RedirectStandardOutput "$DIR\logs\signal.log" -RedirectStandardError "$DIR\logs\signal-err.log"
+Write-Host "  [2/3] Signal Bot (BTC 15m)     STARTED" -ForegroundColor Green
+
+Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "src\index.js" -WorkingDirectory "$DIR\autobot" -RedirectStandardOutput "$DIR\logs\autobot.log" -RedirectStandardError "$DIR\logs\autobot-err.log"
+Write-Host "  [3/3] Autonomous Bot           STARTED" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "  All bots launched in background."
+Write-Host ""
+
+# ── Create desktop shortcut ──
+Write-Host "  [shortcut] Creating desktop shortcut..."
+try {
+    $ws = New-Object -ComObject WScript.Shell
+    $s = $ws.CreateShortcut("$env:USERPROFILE\Desktop\Polymarket Bots.lnk")
+    $s.TargetPath = "$DIR\start.bat"
+    $s.WorkingDirectory = $DIR
+    $s.IconLocation = "shell32.dll,21"
+    $s.Description = "Launch Polymarket Trading Suite"
+    $s.Save()
+    Write-Host "  [ok] Desktop shortcut created" -ForegroundColor Green
+} catch {
+    Write-Host "  [skip] Could not create shortcut"
 }
 
-Start-Bot "1-CopyBot"   "$DIR\copybot" ".env" "src\index.js" "$DIR\logs\copybot.log"
-Start-Bot "2-SignalBot"  "$DIR"         ".env" "src\index.js" "$DIR\logs\signal.log"
-Start-Bot "3-AutoBot"    "$DIR\autobot" ".env" "src\index.js" "$DIR\logs\autobot.log"
-
 Write-Host ""
-Write-Host "  Wallets:" -ForegroundColor White
-Write-Host "  Signal:  0x5eD48e29dcd952955d7E4fccC3616EFA38cD75a5"
-Write-Host "  Copy:    0xf35803f093BBceaBEb9A6abd3d4c99856BDdA40C"
-Write-Host "  Auto:    0xf17Cb352380Fd5503742c5A0573cDE4c656d8486"
-Write-Host ""
-Write-Host "  Safeguards (tuned for `$20 wallets):" -ForegroundColor Yellow
-Write-Host "  Per trade:      `$5 max"
-Write-Host "  Portfolio cap:  `$15 max exposure"
-Write-Host "  Position cap:   3 max concurrent"
-Write-Host "  Daily cap:      `$10/day (resets midnight ET)"
-Write-Host "  Spread guard:   5c max"
-Write-Host "  Autobot edge:   12% min (high-conviction only)"
-Write-Host ""
-Write-Host "  Watch logs:" -ForegroundColor White
-Write-Host "    Get-Content $DIR\logs\copybot.log -Wait -Tail 20"
-Write-Host "    Get-Content $DIR\logs\signal.log -Wait -Tail 20"
-Write-Host "    Get-Content $DIR\logs\autobot.log -Wait -Tail 20"
-Write-Host ""
-Write-Host "  Stop all bots:" -ForegroundColor White
-Write-Host "    Get-Process node | Stop-Process -Force"
-Write-Host ""
-Write-Host "═══════════════════════════════════════════" -ForegroundColor Green
-Write-Host "  ALL BOTS RUNNING" -ForegroundColor Green
-Write-Host "═══════════════════════════════════════════" -ForegroundColor Green
+Write-Host "  ═══════════════════════════════════════════" -ForegroundColor Green
+Write-Host "    Opening Dashboard..." -ForegroundColor Green
+Write-Host "  ═══════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
 
-# Tail all logs
-Write-Host "  Streaming logs (Ctrl+C to stop viewing, bots keep running)..." -ForegroundColor DarkGray
-Write-Host ""
+# Give bots 3 seconds to start
 Start-Sleep 3
-Get-Content "$DIR\logs\copybot.log","$DIR\logs\signal.log","$DIR\logs\autobot.log" -Wait -Tail 5 -ErrorAction SilentlyContinue
+
+# Launch dashboard in this window
+$Host.UI.RawUI.WindowTitle = "Polymarket Dashboard"
+Set-Location $DIR
+node dashboard.js
