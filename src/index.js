@@ -25,6 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { applyGlobalProxyFromEnv } from "./net/proxy.js";
+import { Executor } from "./trade/executor.js";
 
 function countVwapCrosses(closes, vwapSeries, lookback) {
   if (closes.length < lookback || vwapSeries.length < lookback) return null;
@@ -396,12 +397,16 @@ async function fetchPolymarketSnapshot() {
 }
 
 async function main() {
+  const executor = new Executor();
+  await executor.init();
+
   const binanceStream = startBinanceTradeStream({ symbol: CONFIG.symbol });
   const polymarketLiveStream = startPolymarketChainlinkPriceStream({});
   const chainlinkStream = startChainlinkPriceStream({});
 
   let prevSpotPrice = null;
   let prevCurrentPrice = null;
+  let prevMarketSlug = null;
   let priceToBeatState = { slug: null, value: null, setAtMs: null };
 
   const header = [
@@ -513,6 +518,14 @@ async function main() {
       const edge = computeEdge({ modelUp: timeAware.adjustedUp, modelDown: timeAware.adjustedDown, marketYes: marketUp, marketNo: marketDown });
 
       const rec = decide({ remainingMinutes: timeLeftMin, edgeUp: edge.edgeUp, edgeDown: edge.edgeDown, modelUp: timeAware.adjustedUp, modelDown: timeAware.adjustedDown });
+
+      // ── Auto-trade execution ──
+      const curSlug = poly.ok ? (poly.market?.slug ?? "") : "";
+      if (prevMarketSlug && curSlug && curSlug !== prevMarketSlug) {
+        executor.onMarketRotate(curSlug);
+      }
+      prevMarketSlug = curSlug;
+      await executor.onSignal(rec, poly);
 
       const vwapSlopeLabel = vwapSlope === null ? "-" : vwapSlope > 0 ? "UP" : vwapSlope < 0 ? "DOWN" : "FLAT";
 
@@ -698,6 +711,9 @@ async function main() {
         kv("ET | Session:", `${ANSI.white}${fmtEtTime(new Date())}${ANSI.reset} | ${ANSI.white}${getBtcSession(new Date())}${ANSI.reset}`),
         "",
         sepLine(),
+        executor.enabled ? kv("AUTO-TRADE:", `${ANSI.green}${executor.statusLine()}${ANSI.reset}`) : null,
+        executor.enabled ? "" : null,
+        executor.enabled ? sepLine() : null,
         centerText(`${ANSI.dim}${ANSI.gray}created by @krajekis${ANSI.reset}`, screenWidth())
       ].filter((x) => x !== null);
 
