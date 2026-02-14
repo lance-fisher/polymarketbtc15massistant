@@ -119,6 +119,22 @@ if not exist "!DIR!\package.json" (
 )
 echo   [ok] Code ready at !DIR!
 
+:: ── Initialize git repo for auto-updates ──
+where git >nul 2>&1
+if not errorlevel 1 (
+    if not exist "!DIR!\.git" (
+        echo   [git] Setting up auto-update support...
+        cd /d "!DIR!"
+        git init -q
+        git remote add origin https://github.com/lance-fisher/polymarketbtc15massistant.git 2>nul
+        git fetch -q origin %BRANCH% 2>nul
+        git reset -q origin/%BRANCH% 2>nul
+        echo   [ok] Auto-update enabled
+    )
+) else (
+    echo   [info] Install git for auto-updates: https://git-scm.com
+)
+
 :SKIP_EXTRACT
 cd /d "!DIR!"
 
@@ -207,21 +223,14 @@ node "!DIR!\check-wallets.js" 2>nul
 echo.
 
 :: ═══════════════════════════════════════════════════════
-::  STEP 7: LAUNCH ALL 3 BOTS + DASHBOARD
+::  STEP 7: LAUNCH DASHBOARD (manages all 3 bots)
 :: ═══════════════════════════════════════════════════════
 echo   ═══════════════════════════════════════════════════
-echo     LAUNCHING ALL 3 BOTS
+echo     LAUNCHING DASHBOARD + ALL 3 BOTS
 echo   ═══════════════════════════════════════════════════
 echo.
-
-start "CopyBot" /min cmd /c ""!DIR!\copybot\run.bat" >> "!DIR!\logs\copybot.log" 2>&1"
-echo   [1/3] Copy Bot (@anoin123)     STARTED
-
-start "SignalBot" /min cmd /c ""!DIR!\run-signal.bat" >> "!DIR!\logs\signal.log" 2>&1"
-echo   [2/3] Signal Bot (BTC 15m)     STARTED
-
-start "AutoBot" /min cmd /c ""!DIR!\autobot\run.bat" >> "!DIR!\logs\autobot.log" 2>&1"
-echo   [3/3] Autonomous Bot           STARTED
+echo   Dashboard spawns and manages all bots as child processes.
+echo   No separate bot windows needed.
 
 echo.
 echo   Wallets:
@@ -261,4 +270,11 @@ echo.
 
 timeout /t 2 /nobreak >nul
 title Polymarket Dashboard
+
+:: Restart loop — dashboard exits on auto-update, then comes back
+:DASHBOARD_LOOP
 node web-dashboard.js
+echo.
+echo   [restart] Dashboard restarting in 3s (auto-update applied)...
+timeout /t 3 /nobreak >nul
+goto :DASHBOARD_LOOP

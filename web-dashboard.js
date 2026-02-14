@@ -146,13 +146,25 @@ function killBots() {
   botProcs.length = 0;
 }
 
-// ── Auto-Update from Git ──
+// ── Auto-Update (git with ZIP fallback) ──
 let lastUpdateCheck = null;
 let updateStatus = "idle";
+const REPO_API = "https://api.github.com/repos/lance-fisher/polymarketbtc15massistant";
+const ZIP_URL = `https://github.com/lance-fisher/polymarketbtc15massistant/archive/refs/heads/${BRANCH}.zip`;
+let knownSha = null;
 
 function checkForUpdates() {
+  // Try git first (works if LAUNCH.bat set up .git)
+  if (existsSync(path.join(ROOT, ".git"))) {
+    checkForUpdatesGit();
+  } else {
+    checkForUpdatesZip();
+  }
+}
+
+function checkForUpdatesGit() {
   exec(`git fetch origin ${BRANCH}`, { cwd: ROOT, timeout: 15000 }, (err) => {
-    if (err) { updateStatus = "fetch-error"; return; }
+    if (err) { checkForUpdatesZip(); return; }  // git failed, try ZIP
     exec("git rev-parse HEAD", { cwd: ROOT }, (err, localHash) => {
       if (err) return;
       exec(`git rev-parse origin/${BRANCH}`, { cwd: ROOT }, (err, remoteHash) => {
@@ -163,11 +175,9 @@ function checkForUpdates() {
           console.log("\n  [update] New code detected! Pulling...");
           exec(`git pull origin ${BRANCH}`, { cwd: ROOT, timeout: 30000 }, (pullErr) => {
             if (pullErr) { console.log("  [update] Pull failed:", pullErr.message); updateStatus = "pull-error"; return; }
-            console.log("  [update] Updated! Restarting everything...\n");
+            console.log("  [update] Updated! Restarting...\n");
             killBots();
-            server.close(() => {
-              setTimeout(() => process.exit(0), 1000);
-            });
+            server.close(() => { setTimeout(() => process.exit(0), 1000); });
           });
         } else {
           updateStatus = "up-to-date";
@@ -175,6 +185,51 @@ function checkForUpdates() {
       });
     });
   });
+}
+
+function checkForUpdatesZip() {
+  fetch(`${REPO_API}/commits/${BRANCH}`, {
+    headers: { "Accept": "application/vnd.github.v3+json", "User-Agent": "PolymarketBot/1.0" },
+    signal: AbortSignal.timeout(15000),
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data?.sha) { updateStatus = "fetch-error"; return; }
+      lastUpdateCheck = new Date();
+      if (!knownSha) { knownSha = data.sha; updateStatus = "up-to-date"; return; }
+      if (data.sha === knownSha) { updateStatus = "up-to-date"; return; }
+      updateStatus = "updating";
+      console.log("\n  [update] New code detected! Downloading...");
+      // Download ZIP, extract, restart
+      import("node:https").then(({ default: https }) => {
+        const tmpZip = path.join(ROOT, ".update.zip");
+        const file = createWriteStream(tmpZip);
+        const get = (url) => https.get(url, { headers: { "User-Agent": "PolymarketBot/1.0" } }, (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) { get(res.headers.location); return; }
+          res.pipe(file);
+          file.on("finish", () => {
+            file.close();
+            // Extract over current code (preserving node_modules, .env, state)
+            exec(`powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; Expand-Archive -Path '${tmpZip}' -DestinationPath '${path.join(ROOT, ".update-tmp")}' -Force"`, { timeout: 30000 }, (err) => {
+              if (err) { console.log("  [update] Extract failed:", err.message); updateStatus = "pull-error"; return; }
+              // Copy extracted files over (skip node_modules, .env, state, .git)
+              exec(`powershell -NoProfile -Command "Get-ChildItem '${path.join(ROOT, ".update-tmp", "*", "*")}' | Where-Object { $_.Name -notin @('node_modules','.env','state.json','autobot-state.json','.git','logs') } | Copy-Item -Destination '${ROOT}' -Recurse -Force"`, { timeout: 15000 }, (err2) => {
+                // Cleanup
+                exec(`rmdir /s /q "${path.join(ROOT, ".update-tmp")}"`, { cwd: ROOT });
+                try { require("node:fs").unlinkSync(tmpZip); } catch {}
+                if (err2) { console.log("  [update] Copy failed:", err2.message); updateStatus = "pull-error"; return; }
+                knownSha = data.sha;
+                console.log("  [update] Updated! Restarting...\n");
+                killBots();
+                server.close(() => { setTimeout(() => process.exit(0), 1000); });
+              });
+            });
+          });
+        });
+        get(ZIP_URL);
+      });
+    })
+    .catch(() => { updateStatus = "fetch-error"; });
 }
 
 // ── Helpers ──
