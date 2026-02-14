@@ -239,7 +239,7 @@ echo   Signal:  0x5eD48e29dcd952955d7E4fccC3616EFA38cD75a5
 echo   Copy:    0xf35803f093BBceaBEb9A6abd3d4c99856BDdA40C
 echo   Auto:    0xf17Cb352380Fd5503742c5A0573cDE4c656d8486
 echo.
-echo   Safeguards: $5/trade ^| $15 cap ^| 3 positions ^| $10/day ^| 5c spread ^| 5%% edge
+echo   Safeguards: $5/trade ^| $15 cap ^| 3 positions ^| $20/day ^| 8c spread ^| 3%% edge
 echo.
 
 :: ═══════════════════════════════════════════════════════
