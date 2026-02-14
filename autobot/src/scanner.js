@@ -43,38 +43,3 @@ export async function fetchBook(tokenId) {
 
   return { bestBid, bestAsk, bidDepth, askDepth };
 }
-
-/**
- * Parse market into tradeable outcomes with prices and token IDs.
- */
-export function parseOutcomes(market) {
-  let outcomes, prices, tokenIds;
-  try {
-    outcomes = Array.isArray(market.outcomes)
-      ? market.outcomes
-      : (typeof market.outcomes === "string" ? JSON.parse(market.outcomes) : []);
-  } catch { outcomes = []; }
-
-  try {
-    prices = Array.isArray(market.outcomePrices)
-      ? market.outcomePrices.map(Number)
-      : (typeof market.outcomePrices === "string" ? JSON.parse(market.outcomePrices).map(Number) : []);
-  } catch { prices = []; }
-
-  try {
-    tokenIds = Array.isArray(market.clobTokenIds)
-      ? market.clobTokenIds
-      : (typeof market.clobTokenIds === "string" ? JSON.parse(market.clobTokenIds) : []);
-  } catch { tokenIds = []; }
-
-  const result = [];
-  for (let i = 0; i < outcomes.length; i++) {
-    if (!tokenIds[i]) continue;
-    result.push({
-      label:   String(outcomes[i]),
-      price:   prices[i] ?? null,
-      tokenId: String(tokenIds[i]),
-    });
-  }
-  return result;
-}

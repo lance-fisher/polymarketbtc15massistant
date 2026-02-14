@@ -216,7 +216,7 @@ function checkForUpdatesZip() {
               exec(`powershell -NoProfile -Command "Get-ChildItem '${path.join(ROOT, ".update-tmp", "*", "*")}' | Where-Object { $_.Name -notin @('node_modules','.env','state.json','autobot-state.json','.git','logs') } | Copy-Item -Destination '${ROOT}' -Recurse -Force"`, { timeout: 15000 }, (err2) => {
                 // Cleanup
                 exec(`rmdir /s /q "${path.join(ROOT, ".update-tmp")}"`, { cwd: ROOT });
-                try { require("node:fs").unlinkSync(tmpZip); } catch {}
+                try { import("node:fs").then(fs => fs.unlinkSync(tmpZip)).catch(() => {}); } catch {}
                 if (err2) { console.log("  [update] Copy failed:", err2.message); updateStatus = "pull-error"; return; }
                 knownSha = data.sha;
                 console.log("  [update] Updated! Restarting...\n");

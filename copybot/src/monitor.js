@@ -40,16 +40,6 @@ export async function fetchPositions(address) {
   return res.json();
 }
 
-/* ─── Fetch recent trade activity ──────────────────────────── */
-
-export async function fetchActivity(address, sinceTs = 0) {
-  let url = `${CFG.dataUrl}/activity?user=${address}&type=TRADE&sortBy=TIMESTAMP&sortDirection=DESC&limit=50`;
-  if (sinceTs) url += `&start=${sinceTs}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT) });
-  if (!res.ok) throw new Error(`activity ${res.status}`);
-  return res.json();
-}
-
 /* ─── Fetch market info (need negRisk flag) ────────────────── */
 
 const marketCache = new Map();

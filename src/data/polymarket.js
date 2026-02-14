@@ -21,23 +21,6 @@ export async function fetchMarketBySlug(slug) {
   return market;
 }
 
-export async function fetchMarketsBySeriesSlug({ seriesSlug, limit = 50 }) {
-  const url = new URL("/markets", CONFIG.gammaBaseUrl);
-  url.searchParams.set("seriesSlug", seriesSlug);
-  url.searchParams.set("active", "true");
-  url.searchParams.set("closed", "false");
-  url.searchParams.set("enableOrderBook", "true");
-  url.searchParams.set("limit", String(limit));
-
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) {
-    throw new Error(`Gamma markets(series) error: ${res.status} ${await res.text()}`);
-  }
-
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
-}
-
 export async function fetchLiveEventsBySeriesId({ seriesId, limit = 20 }) {
   const url = new URL("/events", CONFIG.gammaBaseUrl);
   url.searchParams.set("series_id", String(seriesId));
@@ -63,22 +46,6 @@ export function flattenEventMarkets(events) {
     }
   }
   return out;
-}
-
-export async function fetchActiveMarkets({ limit = 200, offset = 0 } = {}) {
-  const url = new URL("/markets", CONFIG.gammaBaseUrl);
-  url.searchParams.set("active", "true");
-  url.searchParams.set("closed", "false");
-  url.searchParams.set("enableOrderBook", "true");
-  url.searchParams.set("limit", String(limit));
-  url.searchParams.set("offset", String(offset));
-
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) {
-    throw new Error(`Gamma markets(active) error: ${res.status} ${await res.text()}`);
-  }
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
 }
 
 function safeTimeMs(x) {
@@ -112,33 +79,6 @@ export function pickLatestLiveMarket(markets, nowMs = Date.now()) {
     .sort((a, b) => a.endMs - b.endMs);
 
   return upcoming.length ? upcoming[0].m : null;
-}
-
-function marketHasSeriesSlug(market, seriesSlug) {
-  if (!market || !seriesSlug) return false;
-
-  const events = Array.isArray(market.events) ? market.events : [];
-  for (const e of events) {
-    const series = Array.isArray(e.series) ? e.series : [];
-    for (const s of series) {
-      if (String(s.slug ?? "").toLowerCase() === String(seriesSlug).toLowerCase()) return true;
-    }
-    if (String(e.seriesSlug ?? "").toLowerCase() === String(seriesSlug).toLowerCase()) return true;
-  }
-  if (String(market.seriesSlug ?? "").toLowerCase() === String(seriesSlug).toLowerCase()) return true;
-  return false;
-}
-
-export function filterBtcUpDown15mMarkets(markets, { seriesSlug, slugPrefix } = {}) {
-  const prefix = (slugPrefix ?? "").toLowerCase();
-  const wantedSeries = (seriesSlug ?? "").toLowerCase();
-
-  return (Array.isArray(markets) ? markets : []).filter((m) => {
-    const slug = String(m.slug ?? "").toLowerCase();
-    const matchesPrefix = prefix ? slug.startsWith(prefix) : false;
-    const matchesSeries = wantedSeries ? marketHasSeriesSlug(m, wantedSeries) : false;
-    return matchesPrefix || matchesSeries;
-  });
 }
 
 export async function fetchClobPrice({ tokenId, side }) {
