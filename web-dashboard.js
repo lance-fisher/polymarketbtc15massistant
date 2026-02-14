@@ -165,7 +165,9 @@ function checkForUpdates() {
             if (pullErr) { console.log("  [update] Pull failed:", pullErr.message); updateStatus = "pull-error"; return; }
             console.log("  [update] Updated! Restarting everything...\n");
             killBots();
-            setTimeout(() => process.exit(0), 2000);
+            server.close(() => {
+              setTimeout(() => process.exit(0), 1000);
+            });
           });
         } else {
           updateStatus = "up-to-date";
@@ -572,8 +574,8 @@ server.listen(PORT, () => {
   exec(`${cmd} http://localhost:${PORT}`);
 });
 
-// Clean shutdown — kill bot children on exit
-function shutdown() { killBots(); process.exit(0); }
+// Clean shutdown — close server + kill bot children on exit
+function shutdown() { killBots(); server.close(() => process.exit(0)); }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 process.on("exit", () => { for (const { proc } of botProcs) try { proc.kill(); } catch {} });
