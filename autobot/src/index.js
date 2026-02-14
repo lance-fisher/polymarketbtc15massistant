@@ -170,7 +170,8 @@ async function main() {
             break;
           }
 
-          // ── Guard: spread check (fetch actual book) ──
+          // ── Guard: spread check + get actual ask price ──
+          let buyPrice = opp.price;  // fallback to Gamma price
           try {
             const book = await fetchBook(opp.tokenId);
             if (book && book.bestAsk != null && book.bestBid != null) {
@@ -179,20 +180,22 @@ async function main() {
                 console.log(`[trade] Skip "${(opp.market.question || "").slice(0, 40)}" — spread ${spreadCents}c > ${CFG.maxSpreadCents}c`);
                 continue;
               }
+              // Use actual best ask — Gamma mid-price won't fill FOK orders
+              buyPrice = book.bestAsk;
             }
-          } catch { /* book fetch failed, proceed with caution */ }
+          } catch { /* book fetch failed, use Gamma price */ }
 
           const usdcToSpend = Math.min(CFG.maxTradeUsdc, budgetLeft - (traded * CFG.maxTradeUsdc));
           if (usdcToSpend < 1) break;
 
-          console.log(`\n[trade] >>> BUY "${opp.outcome}" @ ${(opp.price * 100).toFixed(0)}c for $${usdcToSpend.toFixed(2)}`);
+          console.log(`\n[trade] >>> BUY "${opp.outcome}" @ ${(buyPrice * 100).toFixed(0)}c for $${usdcToSpend.toFixed(2)}`);
           console.log(`[trade]     "${(opp.market.question || "").slice(0, 60)}"`);
           console.log(`[trade]     edge:${(opp.edge * 100).toFixed(1)}% | R/R:${opp.rrRatio}x | reasons:[${opp.reasons.join(",")}]`);
 
           const result = await placeBuyOrder({
             wallet, creds,
             tokenId: opp.tokenId,
-            price: opp.price,
+            price: buyPrice,
             usdcAmount: usdcToSpend,
             negRisk: opp.market.negRisk,
           });
@@ -205,14 +208,14 @@ async function main() {
           }
 
           if (result.success || result.orderID) {
-            const shares = usdcToSpend / opp.price;
+            const shares = usdcToSpend / buyPrice;
             state.positions[key] = {
               tokenId:     opp.tokenId,
               conditionId: opp.market.conditionId,
               outcome:     opp.outcome,
               question:    (opp.market.question || "").slice(0, 80),
               slug:        opp.market.slug,
-              price:       opp.price,
+              price:       buyPrice,
               cost:        usdcToSpend,
               shares,
               negRisk:     opp.market.negRisk,
