@@ -670,6 +670,14 @@ function onServerReady() {
 }
 
 let listenRetries = 0;
+let serverStarted = false;
+
+function safeOnServerReady() {
+  if (serverStarted) return;
+  serverStarted = true;
+  onServerReady();
+}
+
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE" && listenRetries < 5) {
     listenRetries++;
@@ -679,7 +687,7 @@ server.on("error", (err) => {
       : `fuser -k ${PORT}/tcp`;
     exec(killCmd, () => {
       setTimeout(() => {
-        server.listen(PORT, "127.0.0.1", onServerReady);
+        server.listen(PORT, "0.0.0.0", safeOnServerReady);
       }, 3000);
     });
   } else {
@@ -688,7 +696,7 @@ server.on("error", (err) => {
   }
 });
 
-server.listen(PORT, "127.0.0.1", onServerReady);
+server.listen(PORT, "0.0.0.0", safeOnServerReady);
 
 // Clean shutdown — close server + kill bot children on exit
 function shutdown() { killBots(); server.close(() => process.exit(0)); }
