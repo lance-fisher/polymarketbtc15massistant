@@ -405,6 +405,12 @@ const HTML = `<!DOCTYPE html>
     <div class="activity" id="activity"></div>
   </div>
 
+  <div id="fundingAlert" style="display:none; background:#d29922; color:#0a0e17; border-radius:10px; padding:18px 24px; margin-bottom:16px; font-size:14px; line-height:1.6;">
+    <strong style="font-size:16px">WALLETS NEED FUNDING</strong><br>
+    Bots are running but can't trade until wallets are funded on <b>Polygon network</b>.<br>
+    Send <b>$20 USDC + 0.5 MATIC</b> per wallet. Minimum: $5 USDC + 0.1 MATIC.<br>
+    <span style="font-size:12px; opacity:0.8">Easiest: Coinbase/Binance → withdraw to Polygon address shown above</span>
+  </div>
   <div class="refresh-bar">Dashboard refreshes every 10s · Code auto-updates from git every 60s · Bots managed by dashboard</div>
   <div class="footer">created by @krajekis</div>
 </div>
@@ -439,6 +445,10 @@ async function refresh() {
     ).join('');
 
     document.getElementById('total').textContent = '$' + d.total.toFixed(2) + ' USDC';
+
+    // Funding alert
+    var needsFunding = d.wallets.some(w => w.balance !== null && w.balance < 5);
+    document.getElementById('fundingAlert').style.display = needsFunding ? 'block' : 'none';
 
     // Copy Bot
     document.getElementById('copyCount').textContent = d.copy.positions.length + '/3 positions | $' + d.copy.exposure.toFixed(2) + '/$15 deployed';

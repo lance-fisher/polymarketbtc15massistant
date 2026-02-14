@@ -76,18 +76,19 @@ async function main() {
   const wallet   = new ethers.Wallet(CFG.privateKey, provider);
   log("init", `Wallet: ${wallet.address}`);
 
-  // ── Derive CLOB API credentials (with retry) ──
+  // ── Derive CLOB API credentials (with retry — never gives up) ──
   log("init", "Deriving CLOB API credentials…");
   let creds;
-  for (let attempt = 1; attempt <= 5; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     try {
       creds = await deriveApiKey(wallet);
       log("init", `API key: ${creds.apiKey.slice(0, 8)}…`);
       break;
     } catch (e) {
-      log("init", `CLOB auth attempt ${attempt}/5 failed: ${e.message}`);
-      if (attempt === 5) { console.error("CLOB auth failed after 5 attempts"); process.exit(1); }
-      await sleep(attempt * 3000);
+      log("init", `CLOB auth attempt ${attempt} failed: ${e.message}`);
+      const delay = Math.min(attempt * 3000, 30000);
+      log("init", `Retrying in ${delay / 1000}s…`);
+      await sleep(delay);
     }
   }
 

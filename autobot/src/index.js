@@ -48,15 +48,16 @@ async function main() {
   console.log(`[init] Wallet: ${wallet.address}`);
 
   let creds;
-  for (let attempt = 1; attempt <= 5; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     try {
       creds = await deriveApiKey(wallet);
       console.log(`[init] CLOB API: ${creds.apiKey.slice(0, 8)}…`);
       break;
     } catch (e) {
-      console.log(`[init] CLOB auth attempt ${attempt}/5 failed: ${e.message}`);
-      if (attempt === 5) { console.error("[init] CLOB auth failed after 5 attempts"); process.exit(1); }
-      await sleep(attempt * 3000);
+      console.log(`[init] CLOB auth attempt ${attempt} failed: ${e.message}`);
+      const delay = Math.min(attempt * 3000, 30000);
+      console.log(`[init] Retrying in ${delay / 1000}s…`);
+      await sleep(delay);
     }
   }
 
