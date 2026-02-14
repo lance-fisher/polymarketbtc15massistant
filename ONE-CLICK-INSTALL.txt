@@ -1,0 +1,36 @@
+═══════════════════════════════════════════════════════════════
+  POLYMARKET TRADING BOTS — ONE-CLICK INSTALL
+═══════════════════════════════════════════════════════════════
+
+  OPTION A: Download LAUNCH.bat from GitHub (easiest)
+  ─────────────────────────────────────────────────────
+  1. Go to this URL in your browser:
+     https://github.com/lance-fisher/polymarketbtc15massistant/raw/claude/polymarket-copy-bot-xcdOo/LAUNCH.bat
+
+  2. Save the file to your Desktop
+
+  3. Double-click LAUNCH.bat
+
+  That's it. It handles everything automatically:
+  - Installs Node.js if missing
+  - Downloads all bot code (no Git needed)
+  - Installs dependencies
+  - Writes config files
+  - Launches all 3 bots
+  - Opens dashboard in your browser
+  - Creates a desktop shortcut for next time
+
+
+  OPTION B: PowerShell one-liner
+  ─────────────────────────────────────────────────────
+  Press Win+R, paste this, hit Enter:
+
+  powershell -Command "iwr 'https://github.com/lance-fisher/polymarketbtc15massistant/raw/claude/polymarket-copy-bot-xcdOo/LAUNCH.bat' -OutFile $env:TEMP\LAUNCH.bat; Start-Process $env:TEMP\LAUNCH.bat"
+
+
+  AFTER FIRST INSTALL
+  ─────────────────────────────────────────────────────
+  A "Polymarket Bots" shortcut appears on your Desktop.
+  Double-click it anytime to restart the bots.
+
+═══════════════════════════════════════════════════════════════
