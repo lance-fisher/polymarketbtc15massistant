@@ -98,12 +98,13 @@ ping -n 6 127.0.0.1 >nul
 goto loop
 
 :: ═══════════════════════════════════════════════════════
-::  Desktop shortcut creation — tries all known locations
+::  Desktop launcher — drops a simple .bat onto the desktop
+::  (more reliable than COM .lnk shortcuts)
 :: ═══════════════════════════════════════════════════════
 :create_shortcut
-set "SHORTCUT_NAME=Polymarket Bots.lnk"
 set "LAUNCHER_PATH=%DIR%\launcher.bat"
 
+:: Find desktop folder
 set "DESKTOP="
 if exist "%USERPROFILE%\OneDrive\Desktop" (
     set "DESKTOP=%USERPROFILE%\OneDrive\Desktop"
@@ -118,14 +119,27 @@ if "%DESKTOP%"=="" (
     goto :eof
 )
 
-set "SHORTCUT=%DESKTOP%\%SHORTCUT_NAME%"
-if exist "%SHORTCUT%" goto :eof
+:: Write a simple .bat launcher on the desktop (always works, no COM needed)
+set "BATFILE=%DESKTOP%\Polymarket Bots.bat"
+if not exist "%BATFILE%" (
+    echo   [shortcut] Creating desktop launcher at %DESKTOP%...
+    (
+        echo @echo off
+        echo title Polymarket Trading Suite
+        echo cd /d "%DIR%"
+        echo call launcher.bat
+    ) > "%BATFILE%"
+    if exist "%BATFILE%" (
+        echo   [ok] Desktop launcher created: "Polymarket Bots.bat"
+    ) else (
+        echo   [skip] Could not write to desktop
+    )
+)
 
-echo   [shortcut] Creating desktop shortcut at %DESKTOP%...
-powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%LAUNCHER_PATH%'; $s.WorkingDirectory = '%DIR%'; $s.IconLocation = 'shell32.dll,21'; $s.Description = 'Launch Polymarket Trading Suite (persistent)'; $s.Save()" 2>nul
-if exist "%SHORTCUT%" (
-    echo   [ok] Desktop shortcut created: "%SHORTCUT_NAME%"
-) else (
-    echo   [skip] Could not create shortcut
+:: Also try .lnk shortcut (nicer icon) — but don't fail if it doesn't work
+set "LNKFILE=%DESKTOP%\Polymarket Bots.lnk"
+if not exist "%LNKFILE%" (
+    powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%LNKFILE%'); $s.TargetPath = '%LAUNCHER_PATH%'; $s.WorkingDirectory = '%DIR%'; $s.IconLocation = 'shell32.dll,21'; $s.Description = 'Launch Polymarket Trading Suite (persistent)'; $s.Save()" 2>nul
+    if exist "%LNKFILE%" echo   [ok] Desktop shortcut created: "Polymarket Bots.lnk"
 )
 goto :eof
