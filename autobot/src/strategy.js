@@ -87,10 +87,14 @@ export function scoreOutcome(market, outcome) {
     fairValue = price + 0.08;   // cheap outcomes ~8% undervalued
   } else if (price <= 0.35) {
     fairValue = price + 0.05;   // moderate underpricing
+  } else if (price <= 0.45) {
+    fairValue = price + 0.03;   // slight underpricing — still worth trading
   } else if (price >= 0.85) {
     fairValue = price - 0.05;   // expensive = buy the other side
   } else if (price >= 0.70) {
     fairValue = price - 0.03;
+  } else if (price >= 0.55) {
+    fairValue = price - 0.02;   // slightly overpriced — complement may have value
   } else {
     fairValue = price;          // fair-priced, no edge
   }

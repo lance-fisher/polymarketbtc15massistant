@@ -21,9 +21,9 @@ export const CFG = {
   maxPortfolioUsdc: Number(e.MAX_PORTFOLIO_USDC) || 15,
   maxPositions:     Number(e.MAX_POSITIONS) || 3,
   maxDailyUsdc:     Number(e.MAX_DAILY_USDC) || 10,
-  maxSpreadCents:   Number(e.MAX_SPREAD_CENTS) || 5,
+  maxSpreadCents:   Number(e.MAX_SPREAD_CENTS) || 8,
   scanIntervalS:    Number(e.SCAN_INTERVAL_S) || 45,
-  minEdge:          0.05,       // hardcoded — strategy tuning, not user config
+  minEdge:          0.03,       // hardcoded — 3% min edge for autonomous trades
   minLiquidity:     3000,       // hardcoded — auto-update safe
 
   gammaUrl:  "https://gamma-api.polymarket.com",

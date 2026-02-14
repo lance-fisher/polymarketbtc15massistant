@@ -24,7 +24,7 @@ export const CFG = {
   maxPortfolioUsdc: Number(e.MAX_PORTFOLIO_USDC) || 15,
   maxPositions:    Number(e.MAX_POSITIONS) || 3,
   maxDailyUsdc:    Number(e.MAX_DAILY_USDC) || 10,
-  maxSpreadCents:  Number(e.MAX_SPREAD_CENTS) || 5,
+  maxSpreadCents:  Number(e.MAX_SPREAD_CENTS) || 8,
   maxNewPerCycle:  3,          // hardcoded — enter multiple positions per cycle
   pollIntervalS:   Number(e.POLL_INTERVAL_S) || 20,
 

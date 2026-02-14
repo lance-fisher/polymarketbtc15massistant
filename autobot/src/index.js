@@ -180,8 +180,8 @@ async function main() {
                 console.log(`[trade] Skip "${(opp.market.question || "").slice(0, 40)}" — spread ${spreadCents}c > ${CFG.maxSpreadCents}c`);
                 continue;
               }
-              // Use actual best ask — Gamma mid-price won't fill FOK orders
-              buyPrice = book.bestAsk;
+              // Use bestAsk + 2c buffer so FOK sweeps multiple price levels
+              buyPrice = Math.min(book.bestAsk + 0.02, 0.99);
             }
           } catch { /* book fetch failed, use Gamma price */ }
 

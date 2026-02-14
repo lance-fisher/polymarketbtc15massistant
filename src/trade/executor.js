@@ -38,7 +38,7 @@ export class Executor {
     this.dailySpent  = 0;
     this.dailyResetDate = "";
     this.maxDailyUsdc = Number(process.env.MAX_DAILY_USDC) || 10;
-    this.maxSpreadCents = Number(process.env.MAX_SPREAD_CENTS) || 5;
+    this.maxSpreadCents = Number(process.env.MAX_SPREAD_CENTS) || 8;
   }
 
   _todayET() {
@@ -172,11 +172,11 @@ export class Executor {
 
     const side    = rec.side;  // "UP" or "DOWN"
     const tokenId = side === "UP" ? poly.tokens.upTokenId : poly.tokens.downTokenId;
-    const price   = side === "UP" ? poly.prices.up : poly.prices.down;
+    let price     = side === "UP" ? poly.prices.up : poly.prices.down;
 
     if (!tokenId || !price || price <= 0 || price >= 1) return;
 
-    // ── Guard: spread check ──
+    // ── Guard: spread check + get actual ask price ──
     try {
       const book = await fetchOrderBook({ tokenId });
       const summary = summarizeOrderBook(book);
@@ -185,10 +185,16 @@ export class Executor {
         console.log(`[trade] Skip — spread ${spreadCents}c > ${this.maxSpreadCents}c`);
         return;
       }
+      // Use actual bestAsk + 2c buffer for FOK fill reliability
+      if (summary.bestAsk != null) {
+        price = Math.min(summary.bestAsk + 0.02, 0.99);
+      }
     } catch {
-      // If we can't check spread, proceed with caution
+      // If we can't check spread, proceed with market price + buffer
+      price = Math.min(price + 0.02, 0.99);
     }
 
+    const negRisk = poly.market?.negRisk === true || poly.market?.negRisk === "true";
     const usdcToSpend = this.maxUsdc;
 
     console.log(`\n[trade] >>> BUY ${side} @ ${(price * 100).toFixed(0)}c for $${usdcToSpend.toFixed(2)}`);
@@ -201,7 +207,7 @@ export class Executor {
         tokenId,
         price,
         usdcAmount: usdcToSpend,
-        negRisk: false,
+        negRisk,
       });
 
       // Auto-refresh API key on auth failure
