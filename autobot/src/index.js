@@ -60,10 +60,42 @@ async function main() {
   // Check balance
   try {
     const usdcAbi = ["function balanceOf(address) view returns (uint256)"];
-    const usdc = new ethers.Contract(CFG.usdc, usdcAbi, provider);
-    const bal = Number(await usdc.balanceOf(wallet.address)) / 1e6;
+    const usdcC = new ethers.Contract(CFG.usdc, usdcAbi, provider);
+    const bal = Number(await usdcC.balanceOf(wallet.address)) / 1e6;
     console.log(`[init] USDC balance: $${bal.toFixed(2)}`);
+    if (bal < CFG.maxTradeUsdc) {
+      console.log(`[init] ⚠ Balance ($${bal.toFixed(2)}) < MAX_TRADE_USDC ($${CFG.maxTradeUsdc}) — fund wallet to trade`);
+    }
   } catch { console.log("[init] Could not check balance"); }
+
+  // ── Auto-approve USDC/CTF for exchange contracts ──
+  {
+    const MAX = ethers.MaxUint256;
+    const gasOv = { maxFeePerGas: ethers.parseUnits("50", "gwei"), maxPriorityFeePerGas: ethers.parseUnits("30", "gwei") };
+    const usdc = new ethers.Contract(CFG.usdc,
+      ["function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)"], wallet);
+    const ctf = new ethers.Contract(CFG.ctf,
+      ["function setApprovalForAll(address,bool)", "function isApprovedForAll(address,address) view returns (bool)"], wallet);
+    for (const [label, addr] of [["Exchange", CFG.exchange], ["NegRisk Exchange", CFG.negRiskExchange], ["NegRisk Adapter", CFG.negRiskAdapter]]) {
+      try {
+        const allow = await usdc.allowance(wallet.address, addr);
+        if (allow < ethers.parseUnits("1000000", 6)) {
+          console.log(`[approve] USDC → ${label}…`);
+          const tx = await usdc.approve(addr, MAX, gasOv);
+          await tx.wait();
+          console.log(`[approve] ✓ USDC approved (${tx.hash.slice(0, 10)}…)`);
+        }
+        if (!(await ctf.isApprovedForAll(wallet.address, addr))) {
+          console.log(`[approve] CTF → ${label}…`);
+          const tx = await ctf.setApprovalForAll(addr, true, gasOv);
+          await tx.wait();
+          console.log(`[approve] ✓ CTF approved (${tx.hash.slice(0, 10)}…)`);
+        }
+      } catch (e) {
+        console.log(`[approve] ${label}: ${e.message.slice(0, 80)}`);
+      }
+    }
+  }
 
   const state = loadState();
   const posCount = Object.keys(state.positions).length;

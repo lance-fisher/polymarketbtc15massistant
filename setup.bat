@@ -118,20 +118,17 @@ cd /d "%DIR%\autobot" && call npm install --silent 2>nul
 cd /d "%DIR%"
 echo   [ok] Dependencies ready
 
-:: ── Run approvals (need MATIC for gas) ──
+:: ── Approvals handled automatically by bots on startup ──
 echo.
-echo   [approve] Setting on-chain approvals...
-echo   (needs MATIC/POL in each wallet for gas)
+echo   [approve] Approvals will run automatically on first bot startup
+echo   (each bot checks and approves USDC/CTF if needed)
 echo.
 
-cd /d "%DIR%\copybot"
-for /f "usebackq tokens=1,2 delims==" %%a in (".env") do set "%%a=%%b"
-node src\approve.js 2>&1 || echo   Copy Bot approval skipped (need MATIC?)
-timeout /t 2 /nobreak >nul
+:: ── Initialize state files if missing ──
+if not exist "%DIR%\state.json" echo {} > "%DIR%\state.json"
+if not exist "%DIR%\autobot-state.json" echo {} > "%DIR%\autobot-state.json"
+echo   [ok] State files ready
 
-cd /d "%DIR%\autobot"
-for /f "usebackq tokens=1,2 delims==" %%a in (".env") do set "%%a=%%b"
-node src\approve.js 2>&1 || echo   Auto Bot approval skipped (need MATIC?)
 cd /d "%DIR%"
 
 :: ── Create logs dir ──

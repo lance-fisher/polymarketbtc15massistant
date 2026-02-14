@@ -109,6 +109,35 @@ async function main() {
     }
   } catch { log("warn", "Could not check USDC balance"); }
 
+  // ── Auto-approve USDC/CTF for exchange contracts ──
+  {
+    const MAX = ethers.MaxUint256;
+    const gasOv = { maxFeePerGas: ethers.parseUnits("50", "gwei"), maxPriorityFeePerGas: ethers.parseUnits("30", "gwei") };
+    const usdc = new ethers.Contract(CFG.usdc,
+      ["function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)"], wallet);
+    const ctf = new ethers.Contract(CFG.ctf,
+      ["function setApprovalForAll(address,bool)", "function isApprovedForAll(address,address) view returns (bool)"], wallet);
+    for (const [label, addr] of [["Exchange", CFG.exchange], ["NegRisk Exchange", CFG.negRiskExchange], ["NegRisk Adapter", CFG.negRiskAdapter]]) {
+      try {
+        const allow = await usdc.allowance(wallet.address, addr);
+        if (allow < ethers.parseUnits("1000000", 6)) {
+          log("approve", `USDC → ${label}…`);
+          const tx = await usdc.approve(addr, MAX, gasOv);
+          await tx.wait();
+          log("approve", `✓ USDC approved (${tx.hash.slice(0, 10)}…)`);
+        }
+        if (!(await ctf.isApprovedForAll(wallet.address, addr))) {
+          log("approve", `CTF → ${label}…`);
+          const tx = await ctf.setApprovalForAll(addr, true, gasOv);
+          await tx.wait();
+          log("approve", `✓ CTF approved (${tx.hash.slice(0, 10)}…)`);
+        }
+      } catch (e) {
+        log("approve", `${label}: ${e.message.slice(0, 80)}`);
+      }
+    }
+  }
+
   // ── Load state ──
   const state = loadState();
   const copiedKeys = new Set(Object.keys(state.copied));

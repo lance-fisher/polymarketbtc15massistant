@@ -21,10 +21,19 @@ echo "[setup] Installing dependencies..."
 (cd "$DIR/autobot" && npm install --silent 2>/dev/null)
 echo "[setup] Done"
 
-# ── Run approvals ──
-echo "[setup] Running USDC approvals..."
-(cd "$DIR/copybot" && npm run approve 2>&1 | tail -3) || true
-(cd "$DIR/autobot" && npm run approve 2>&1 | tail -3) || true
+# ── Initialize state files if missing ──
+if [ ! -f "$DIR/state.json" ]; then
+  echo '{}' > "$DIR/state.json"
+  echo "[setup] Created state.json"
+fi
+if [ ! -f "$DIR/autobot-state.json" ]; then
+  echo '{}' > "$DIR/autobot-state.json"
+  echo "[setup] Created autobot-state.json"
+fi
+
+# ── Approvals are now handled automatically by each bot on startup ──
+# No separate approval step needed — bots check and approve inline.
+echo "[setup] Approvals will run automatically on first bot startup"
 echo ""
 
 # ── Launch all 3 bots ──
@@ -47,7 +56,12 @@ echo "  Copy Bot PID:       $PID1"
 echo "  Signal Bot PID:     $PID2"
 echo "  Autonomous Bot PID: $PID3"
 echo ""
-echo "  Logs streaming below (Ctrl+C to stop all)"
+echo "  Logs:"
+echo "    tail -f $DIR/logs/copybot.log"
+echo "    tail -f $DIR/logs/signal.log"
+echo "    tail -f $DIR/logs/autobot.log"
+echo ""
+echo "  Ctrl+C to stop all"
 echo "  ════════════════════════════════════════════"
 echo ""
 
