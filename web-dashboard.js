@@ -87,20 +87,33 @@ function getContracts() {
   return { usdcBridged, usdcNative };
 }
 
-async function fetchBal(addr) {
-  for (let attempt = 0; attempt < RPC_URLS.length; attempt++) {
-    try {
-      const { usdcBridged: ub, usdcNative: un } = getContracts();
-      const [bridged, native] = await Promise.all([
-        ub.balanceOf(addr),
-        un.balanceOf(addr),
-      ]);
-      return (Number(bridged) + Number(native)) / 1e6;
-    } catch {
-      rotateRpc();
+// Balance cache — updated in background, API always returns instantly
+const balCache = new Map();
+let balFetchRunning = false;
+
+async function fetchBalBackground() {
+  if (balFetchRunning) return;
+  balFetchRunning = true;
+  for (const w of WALLETS) {
+    for (let attempt = 0; attempt < RPC_URLS.length; attempt++) {
+      try {
+        const { usdcBridged: ub, usdcNative: un } = getContracts();
+        const [bridged, native] = await Promise.all([
+          ub.balanceOf(w.addr),
+          un.balanceOf(w.addr),
+        ]);
+        balCache.set(w.addr, (Number(bridged) + Number(native)) / 1e6);
+        break;
+      } catch {
+        rotateRpc();
+      }
     }
   }
-  return null;
+  balFetchRunning = false;
+}
+
+function getCachedBal(addr) {
+  return balCache.has(addr) ? balCache.get(addr) : null;
 }
 
 // ── Bot Process Management ──
@@ -287,7 +300,7 @@ function lastSignal() {
 function stripAnsi(s) { return String(s).replace(/\x1b\[[0-9;]*m/g, ""); }
 
 async function getStatus() {
-  const bals = await Promise.all(WALLETS.map(w => fetchBal(w.addr)));
+  const bals = WALLETS.map(w => getCachedBal(w.addr));
 
   const cs = loadJson(COPYBOT_STATE);
   const cPos = cs ? Object.values(cs.copied || {}) : [];
@@ -626,25 +639,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-let listenRetries = 0;
-server.on("error", (err) => {
-  if (err.code === "EADDRINUSE" && listenRetries < 5) {
-    listenRetries++;
-    console.log(`  Port ${PORT} in use — killing old process and retrying in 3s... (attempt ${listenRetries}/5)`);
-    // Try to kill whatever is holding the port
-    const killCmd = process.platform === "win32"
-      ? `powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${PORT} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`
-      : `fuser -k ${PORT}/tcp`;
-    exec(killCmd, () => {
-      setTimeout(() => server.listen(PORT), 3000);
-    });
-  } else {
-    console.error(`  Fatal server error: ${err.message}`);
-    process.exit(1);
-  }
-});
-
-server.listen(PORT, "127.0.0.1", () => {
+function onServerReady() {
   console.log("");
   console.log("  ╔══════════════════════════════════════════════════════╗");
   console.log(`  ║   DASHBOARD READY: http://localhost:${PORT}            ║`);
@@ -655,6 +650,10 @@ server.listen(PORT, "127.0.0.1", () => {
   // Spawn all bots as child processes
   console.log("  Starting bots...");
   spawnBots();
+
+  // Start balance fetcher (every 30 seconds, non-blocking)
+  fetchBalBackground();
+  setInterval(fetchBalBackground, 30000);
 
   // Start auto-update polling (every 60 seconds)
   console.log("  Auto-update enabled (checks every 60s)\n");
@@ -668,7 +667,28 @@ server.listen(PORT, "127.0.0.1", () => {
     const cmd = process.platform === "darwin" ? "open" : "xdg-open";
     exec(`${cmd} http://localhost:${PORT}`);
   }
+}
+
+let listenRetries = 0;
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE" && listenRetries < 5) {
+    listenRetries++;
+    console.log(`  Port ${PORT} in use — killing old process and retrying in 3s... (attempt ${listenRetries}/5)`);
+    const killCmd = process.platform === "win32"
+      ? `powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${PORT} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`
+      : `fuser -k ${PORT}/tcp`;
+    exec(killCmd, () => {
+      setTimeout(() => {
+        server.listen(PORT, "127.0.0.1", onServerReady);
+      }, 3000);
+    });
+  } else {
+    console.error(`  Fatal server error: ${err.message}`);
+    process.exit(1);
+  }
 });
+
+server.listen(PORT, "127.0.0.1", onServerReady);
 
 // Clean shutdown — close server + kill bot children on exit
 function shutdown() { killBots(); server.close(() => process.exit(0)); }
