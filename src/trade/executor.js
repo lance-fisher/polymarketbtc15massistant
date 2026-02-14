@@ -153,7 +153,9 @@ export class Executor {
       try {
         this.creds = await deriveApiKey(this.wallet, CLOB_URL);
         console.log(`[trade] CLOB API key: ${this.creds.apiKey.slice(0, 8)}…`);
+        console.log(`[trade] ✓ AUTO-TRADING ENABLED — watching for ENTER signals`);
         this.enabled = true;
+        this._lastHeartbeat = 0;
         break;
       } catch (e) {
         console.log(`[trade] CLOB auth attempt ${attempt}/5 failed: ${e.message}`);
@@ -173,22 +175,36 @@ export class Executor {
     this._resetDailyIfNeeded();
     this._expireStalePosition();
 
+    // Heartbeat log every 5 minutes so user knows trading engine is alive
+    const now = Date.now();
+    if (now - (this._lastHeartbeat || 0) > 5 * 60 * 1000) {
+      this._lastHeartbeat = now;
+      console.log(`[trade] ♥ Trading engine alive | ${this.statusLine()}`);
+    }
+
     if (rec.action !== "ENTER" || !poly?.ok) return;
 
     const slug = poly.market?.slug ?? "";
-    if (!slug) return;
+    if (!slug) {
+      console.log("[trade] Signal ENTER but no market slug — skipping");
+      return;
+    }
 
     // Don't re-enter the same market
     if (this.currentSlug === slug) return;
     if (this.dailySpent + this.maxUsdc > this.maxDailyUsdc) {
-      return; // silently skip — status line will show
+      console.log(`[trade] Signal ENTER but daily cap reached ($${this.dailySpent.toFixed(2)}/$${this.maxDailyUsdc})`);
+      return;
     }
 
     const side    = rec.side;  // "UP" or "DOWN"
     const tokenId = side === "UP" ? poly.tokens.upTokenId : poly.tokens.downTokenId;
     let price     = side === "UP" ? poly.prices.up : poly.prices.down;
 
-    if (!tokenId || !price || price <= 0 || price >= 1) return;
+    if (!tokenId || !price || price <= 0 || price >= 1) {
+      console.log(`[trade] Signal ENTER ${side} but invalid token/price (tokenId=${tokenId ? "ok" : "missing"}, price=${price})`);
+      return;
+    }
 
     // ── Guard: spread check + get actual ask price ──
     try {

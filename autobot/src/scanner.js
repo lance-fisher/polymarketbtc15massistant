@@ -36,10 +36,13 @@ export async function fetchBook(tokenId) {
   const bids = book.bids || [];
   const asks = book.asks || [];
 
-  const bestBid = bids.length ? Math.max(...bids.map(b => Number(b.price))) : null;
-  const bestAsk = asks.length ? Math.min(...asks.map(a => Number(a.price))) : null;
-  const bidDepth = bids.slice(0, 5).reduce((s, b) => s + Number(b.size || 0), 0);
-  const askDepth = asks.slice(0, 5).reduce((s, a) => s + Number(a.size || 0), 0);
+  const validBids = bids.map(b => Number(b.price)).filter(Number.isFinite);
+  const validAsks = asks.map(a => Number(a.price)).filter(Number.isFinite);
+
+  const bestBid = validBids.length ? Math.max(...validBids) : null;
+  const bestAsk = validAsks.length ? Math.min(...validAsks) : null;
+  const bidDepth = bids.slice(0, 5).reduce((s, b) => s + (Number(b.size) || 0), 0);
+  const askDepth = asks.slice(0, 5).reduce((s, a) => s + (Number(a.size) || 0), 0);
 
   return { bestBid, bestAsk, bidDepth, askDepth };
 }
