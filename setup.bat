@@ -164,22 +164,18 @@ echo.
 echo   All bots launched in background windows.
 echo.
 
-:: ── Create desktop shortcut (to launcher.bat for persistent mode) ──
+:: ── Create desktop shortcut (simple .bat — works everywhere) ──
 echo   [shortcut] Creating desktop shortcut...
-set "SC_DESKTOP="
-if exist "%USERPROFILE%\OneDrive\Desktop" (
-    set "SC_DESKTOP=%USERPROFILE%\OneDrive\Desktop"
-) else if exist "%USERPROFILE%\Desktop" (
-    set "SC_DESKTOP=%USERPROFILE%\Desktop"
-)
-if "%SC_DESKTOP%"=="" (
-    for /f "usebackq tokens=*" %%d in (`powershell -Command "[Environment]::GetFolderPath('Desktop')"`) do set "SC_DESKTOP=%%d"
-)
-if not "%SC_DESKTOP%"=="" (
-    set "SHORTCUT=%SC_DESKTOP%\Polymarket Bots.lnk"
-    powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%DIR%\launcher.bat'; $s.WorkingDirectory = '%DIR%'; $s.IconLocation = 'shell32.dll,21'; $s.Description = 'Launch Polymarket Trading Suite (persistent)'; $s.Save()" 2>nul
-    if exist "%SHORTCUT%" (
-        echo   [ok] Desktop shortcut created at %SC_DESKTOP%
+for /f "usebackq tokens=*" %%d in (`powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set "SC_DESKTOP=%%d"
+if "!SC_DESKTOP!"=="" if exist "%USERPROFILE%\OneDrive\Desktop" set "SC_DESKTOP=%USERPROFILE%\OneDrive\Desktop"
+if "!SC_DESKTOP!"=="" if exist "%USERPROFILE%\Desktop" set "SC_DESKTOP=%USERPROFILE%\Desktop"
+
+if not "!SC_DESKTOP!"=="" (
+    echo @echo off> "!SC_DESKTOP!\Polymarket Bots.bat"
+    echo cd /d "!DIR!">> "!SC_DESKTOP!\Polymarket Bots.bat"
+    echo call LAUNCH.bat>> "!SC_DESKTOP!\Polymarket Bots.bat"
+    if exist "!SC_DESKTOP!\Polymarket Bots.bat" (
+        echo   [ok] Desktop shortcut created: "Polymarket Bots.bat"
     ) else (
         echo   [skip] Could not create shortcut
     )

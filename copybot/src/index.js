@@ -12,13 +12,16 @@
  *   - First-run catch-up skip — ignores target's pre-existing positions on launch
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { ethers } from "ethers";
 import { CFG } from "./config.js";
 import { deriveApiKey, placeOrder, getBookPrice } from "./clob.js";
 import { resolveAddress, fetchPositions, fetchMarketInfo, fetchUsdcBalance } from "./monitor.js";
 import { sendSms } from "./sms.js";
 
-const STATE_FILE = new URL("../../state.json", import.meta.url).pathname;
+const __dir = dirname(fileURLToPath(import.meta.url));
+const STATE_FILE = join(__dir, "..", "..", "state.json");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* ─── State ────────────────────────────────────────────────── */

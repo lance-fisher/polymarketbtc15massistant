@@ -546,7 +546,7 @@ server.on("error", (err) => {
     console.log(`  Port ${PORT} in use — killing old process and retrying in 3s... (attempt ${listenRetries}/5)`);
     // Try to kill whatever is holding the port
     const killCmd = process.platform === "win32"
-      ? `for /f "tokens=5" %a in ('netstat -aon ^| findstr :${PORT} ^| findstr LISTENING') do taskkill /F /PID %a`
+      ? `powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${PORT} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`
       : `fuser -k ${PORT}/tcp`;
     exec(killCmd, () => {
       setTimeout(() => server.listen(PORT), 3000);

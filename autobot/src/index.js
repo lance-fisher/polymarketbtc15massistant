@@ -13,13 +13,16 @@
  *   - Max 2 new entries per scan cycle
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { ethers } from "ethers";
 import { CFG } from "./config.js";
 import { deriveApiKey, placeBuyOrder } from "./clob.js";
 import { scanMarkets, fetchBook } from "./scanner.js";
 import { rankOpportunities } from "./strategy.js";
 
-const STATE_FILE = new URL("../../autobot-state.json", import.meta.url).pathname;
+const __dir = dirname(fileURLToPath(import.meta.url));
+const STATE_FILE = join(__dir, "..", "..", "autobot-state.json");
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const ts = () => new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
 function todayET() {
