@@ -553,7 +553,7 @@ async function refresh() {
       document.getElementById('copyPositions').innerHTML = html;
     }
     document.getElementById('copyStats').innerHTML =
-      '<span class="stat">Daily: <b>$' + d.copy.dailySpent.toFixed(2) + '/$10</b></span>' +
+      '<span class="stat">Daily: <b>$' + d.copy.dailySpent.toFixed(2) + '/$20</b></span>' +
       '<span class="stat">Realized: <b>' + pnl(d.copy.realized) + '</b></span>' +
       '<span class="stat">Unrealized: <b>' + pnl(d.copy.unrealized) + '</b></span>';
 
@@ -571,7 +571,7 @@ async function refresh() {
       document.getElementById('autoPositions').innerHTML = html;
     }
     document.getElementById('autoStats').innerHTML =
-      '<span class="stat">Daily: <b>$' + d.auto.dailySpent.toFixed(2) + '/$10</b></span>' +
+      '<span class="stat">Daily: <b>$' + d.auto.dailySpent.toFixed(2) + '/$20</b></span>' +
       '<span class="stat">Invested: <b>$' + d.auto.invested.toFixed(2) + '</b></span>' +
       '<span class="stat">Returned: <b>$' + d.auto.returned.toFixed(2) + '</b></span>';
 
