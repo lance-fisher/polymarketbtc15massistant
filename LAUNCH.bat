@@ -139,12 +139,15 @@ if not errorlevel 1 (
 cd /d "!DIR!"
 
 :: ═══════════════════════════════════════════════════════
-::  STEP 3: Kill any running bots
+::  STEP 3: Kill any running bots + free port 3847
 :: ═══════════════════════════════════════════════════════
+echo   [cleanup] Stopping old processes...
 taskkill /F /FI "WINDOWTITLE eq CopyBot*"   2>nul >nul
 taskkill /F /FI "WINDOWTITLE eq SignalBot*"  2>nul >nul
 taskkill /F /FI "WINDOWTITLE eq AutoBot*"    2>nul >nul
 taskkill /F /FI "WINDOWTITLE eq Polymarket*" 2>nul >nul
+:: Free port 3847 if something else is holding it
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 3847 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }" 2>nul
 timeout /t 1 /nobreak >nul
 
 :: ═══════════════════════════════════════════════════════
@@ -193,13 +196,25 @@ echo MIN_LIQUIDITY=1500
 echo   [ok] Config written
 
 :: ═══════════════════════════════════════════════════════
-::  STEP 5: Install npm dependencies (skip if present)
+::  STEP 5: Install npm dependencies (all 3 projects)
 :: ═══════════════════════════════════════════════════════
-if not exist "!DIR!\node_modules\ethers" (
-    echo   [npm] Installing dependencies...
-    cd /d "!DIR!"         && call npm install --silent 2>nul
-    cd /d "!DIR!\copybot" && call npm install --silent 2>nul
-    cd /d "!DIR!\autobot" && call npm install --silent 2>nul
+set "NEED_INSTALL=0"
+if not exist "!DIR!\node_modules\ethers" set "NEED_INSTALL=1"
+if not exist "!DIR!\copybot\node_modules\ethers" set "NEED_INSTALL=1"
+if not exist "!DIR!\autobot\node_modules\ethers" set "NEED_INSTALL=1"
+
+if "!NEED_INSTALL!"=="1" (
+    echo   [npm] Installing dependencies (root + copybot + autobot^)...
+    cd /d "!DIR!"
+    call npm install --silent 2>nul
+    if errorlevel 1 (
+        echo   [warn] Root npm install had issues — retrying...
+        call npm install 2>nul
+    )
+    cd /d "!DIR!\copybot"
+    call npm install --silent 2>nul
+    cd /d "!DIR!\autobot"
+    call npm install --silent 2>nul
     cd /d "!DIR!"
     echo   [ok] Dependencies installed
 ) else (

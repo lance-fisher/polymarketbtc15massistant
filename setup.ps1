@@ -125,29 +125,8 @@ Pop-Location
 New-Item -ItemType Directory -Path "$DIR\logs" -Force | Out-Null
 
 # ═══════════════════════════════════════════════════════
-#  LAUNCH ALL 3 BOTS
+#  CREATE DESKTOP SHORTCUT (points to LAUNCH.bat)
 # ═══════════════════════════════════════════════════════
-Write-Host ""
-Write-Host "  ═══════════════════════════════════════════" -ForegroundColor Green
-Write-Host "    LAUNCHING ALL 3 BOTS + DASHBOARD" -ForegroundColor Green
-Write-Host "  ═══════════════════════════════════════════" -ForegroundColor Green
-Write-Host ""
-
-# Launch bots as hidden background processes
-Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "src\index.js" -WorkingDirectory "$DIR\copybot" -RedirectStandardOutput "$DIR\logs\copybot.log" -RedirectStandardError "$DIR\logs\copybot-err.log"
-Write-Host "  [1/3] Copy Bot (@anoin123)     STARTED" -ForegroundColor Green
-
-Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "src\index.js" -WorkingDirectory "$DIR" -RedirectStandardOutput "$DIR\logs\signal.log" -RedirectStandardError "$DIR\logs\signal-err.log"
-Write-Host "  [2/3] Signal Bot (BTC 15m)     STARTED" -ForegroundColor Green
-
-Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "src\index.js" -WorkingDirectory "$DIR\autobot" -RedirectStandardOutput "$DIR\logs\autobot.log" -RedirectStandardError "$DIR\logs\autobot-err.log"
-Write-Host "  [3/3] Autonomous Bot           STARTED" -ForegroundColor Green
-
-Write-Host ""
-Write-Host "  All bots launched in background."
-Write-Host ""
-
-# ── Create desktop shortcut ──
 Write-Host "  [shortcut] Creating desktop shortcut..."
 try {
     $desktopPath = [Environment]::GetFolderPath("Desktop")
@@ -155,9 +134,12 @@ try {
         if (Test-Path "$env:USERPROFILE\OneDrive\Desktop") { $desktopPath = "$env:USERPROFILE\OneDrive\Desktop" }
         elseif (Test-Path "$env:USERPROFILE\Desktop") { $desktopPath = "$env:USERPROFILE\Desktop" }
     }
+    # Override: D:\Lance\Desktop if it exists
+    if (Test-Path "D:\Lance\Desktop") { $desktopPath = "D:\Lance\Desktop" }
+
     $ws = New-Object -ComObject WScript.Shell
     $s = $ws.CreateShortcut("$desktopPath\Polymarket Bots.lnk")
-    $s.TargetPath = "$DIR\launcher.bat"
+    $s.TargetPath = "$DIR\LAUNCH.bat"
     $s.WorkingDirectory = $DIR
     $s.IconLocation = "shell32.dll,21"
     $s.Description = "Launch Polymarket Trading Suite"
@@ -167,16 +149,26 @@ try {
     Write-Host "  [skip] Could not create shortcut: $_"
 }
 
+# ═══════════════════════════════════════════════════════
+#  LAUNCH DASHBOARD (manages all 3 bots automatically)
+# ═══════════════════════════════════════════════════════
 Write-Host ""
 Write-Host "  ═══════════════════════════════════════════" -ForegroundColor Green
-Write-Host "    Opening Dashboard..." -ForegroundColor Green
+Write-Host "    LAUNCHING DASHBOARD + ALL 3 BOTS" -ForegroundColor Green
 Write-Host "  ═══════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
+Write-Host "  Dashboard manages all bots as child processes."
+Write-Host "  Open http://localhost:3847 in your browser."
+Write-Host "  Press Ctrl+C to stop everything."
+Write-Host ""
 
-# Give bots 3 seconds to start
-Start-Sleep 3
-
-# Launch dashboard in this window
 $Host.UI.RawUI.WindowTitle = "Polymarket Dashboard"
 Set-Location $DIR
-node dashboard.js
+
+# Restart loop — dashboard exits on auto-update, then comes back
+while ($true) {
+    node web-dashboard.js
+    Write-Host ""
+    Write-Host "  [restart] Dashboard restarting in 3s (auto-update applied)..."
+    Start-Sleep 3
+}

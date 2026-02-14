@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node web-dashboard.js",
+    "signal": "node src/index.js",
     "dashboard": "node web-dashboard.js"
   },
   "dependencies": {
