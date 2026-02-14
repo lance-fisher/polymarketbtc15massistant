@@ -246,8 +246,11 @@ echo.
 ::  STEP 8: Desktop shortcut (for next time, just double-click)
 :: ═══════════════════════════════════════════════════════
 for /f "usebackq tokens=*" %%d in (`powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set "SC_DESKTOP=%%d"
+if "!SC_DESKTOP!"=="" if exist "D:\Lance\Desktop" set "SC_DESKTOP=D:\Lance\Desktop"
 if "!SC_DESKTOP!"=="" if exist "%USERPROFILE%\OneDrive\Desktop" set "SC_DESKTOP=%USERPROFILE%\OneDrive\Desktop"
 if "!SC_DESKTOP!"=="" if exist "%USERPROFILE%\Desktop" set "SC_DESKTOP=%USERPROFILE%\Desktop"
+:: Override: always write to D:\Lance\Desktop if it exists
+if exist "D:\Lance\Desktop" set "SC_DESKTOP=D:\Lance\Desktop"
 
 if not "!SC_DESKTOP!"=="" (
     echo @echo off> "!SC_DESKTOP!\Polymarket Bots.bat"
