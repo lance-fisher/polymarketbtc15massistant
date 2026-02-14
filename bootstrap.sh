@@ -2,7 +2,7 @@
 # ═══════════════════════════════════════════════════════
 #  POLYMARKET 3-BOT LAUNCHER
 #
-#  Just paste this into any terminal (Git Bash, WSL, macOS, Linux):
+#  Paste into any terminal (Git Bash, WSL, macOS, Linux):
 #    bash bootstrap.sh
 #
 #  Or to restart after pulling updates:
@@ -52,7 +52,6 @@ if command -v taskkill >/dev/null 2>&1; then
   taskkill /F /IM node.exe 2>/dev/null || true
 else
   pkill -f "node.*src/index.js" 2>/dev/null || true
-  pkill -f "node.*src/approve.js" 2>/dev/null || true
 fi
 sleep 1
 
@@ -112,48 +111,49 @@ echo "[npm] Installing..."
 (cd "$DIR/autobot" && npm install --silent 2>&1) || true
 echo "[ok] Dependencies installed"
 
-# ── Run approvals (need MATIC for gas) ──
+# ── Initialize state files ──
+[ ! -f "$DIR/state.json" ] && echo '{}' > "$DIR/state.json"
+[ ! -f "$DIR/autobot-state.json" ] && echo '{}' > "$DIR/autobot-state.json"
+echo "[ok] State files ready"
+
+# ── Approvals happen automatically inside each bot on startup ──
+echo "[ok] Approvals will run automatically (first startup only)"
+
+# ═══════════════════════════════════════════════════════
+#  LAUNCH ALL 3 BOTS
+# ═══════════════════════════════════════════════════════
+mkdir -p "$DIR/logs"
+> "$DIR/logs/copybot.log"
+> "$DIR/logs/signal.log"
+> "$DIR/logs/autobot.log"
+
 echo ""
-echo "[approve] Setting USDC + CTF approvals on-chain..."
-echo "  (needs MATIC/POL in each wallet for gas)"
+echo "═══════════════════════════════════════════"
+echo "  LAUNCHING ALL 3 BOTS"
+echo "═══════════════════════════════════════════"
 echo ""
 
-# Helper: load .env vars and run node (works on any Node version)
+# Helper: load .env vars and run node
 run_with_env() {
   local envfile="$1"
   shift
   env $(grep -v '^\s*#' "$envfile" | grep '=' | xargs) "$@"
 }
 
-run_with_env "$DIR/copybot/.env" node "$DIR/copybot/src/approve.js" 2>&1 || echo "  Copy Bot approval failed (need MATIC?)"
-sleep 3
-run_with_env "$DIR/autobot/.env" node "$DIR/autobot/src/approve.js" 2>&1 || echo "  Auto Bot approval failed (need MATIC?)"
-echo ""
-
-# ═══════════════════════════════════════════════════════
-#  LAUNCH ALL 3 BOTS
-# ═══════════════════════════════════════════════════════
-mkdir -p "$DIR/logs"
-
-echo "═══════════════════════════════════════════"
-echo "  LAUNCHING ALL 3 BOTS"
-echo "═══════════════════════════════════════════"
-echo ""
-
 # Bot 1: Copy Bot
 (cd "$DIR/copybot" && run_with_env .env node src/index.js >> "$DIR/logs/copybot.log" 2>&1) &
 P1=$!
-echo "  [1] Copy Bot (@anoin123)   PID=$P1"
+echo "  [1/3] Copy Bot (@anoin123)   PID=$P1"
 
 # Bot 2: Signal Bot (BTC 15m)
 (cd "$DIR" && run_with_env .env node src/index.js >> "$DIR/logs/signal.log" 2>&1) &
 P2=$!
-echo "  [2] Signal Bot (BTC 15m)   PID=$P2"
+echo "  [2/3] Signal Bot (BTC 15m)   PID=$P2"
 
 # Bot 3: Autonomous Bot
 (cd "$DIR/autobot" && run_with_env .env node src/index.js >> "$DIR/logs/autobot.log" 2>&1) &
 P3=$!
-echo "  [3] Autonomous Bot         PID=$P3"
+echo "  [3/3] Autonomous Bot         PID=$P3"
 
 echo ""
 echo "  Wallets:"
@@ -162,7 +162,7 @@ echo "  Signal:  0x5eD48e29dcd952955d7E4fccC3616EFA38cD75a5"
 echo "  Copy:    0xf35803f093BBceaBEb9A6abd3d4c99856BDdA40C"
 echo "  Auto:    0xf17Cb352380Fd5503742c5A0573cDE4c656d8486"
 echo ""
-echo "  Safeguards (tuned for \$20 wallets):"
+echo "  Safeguards:"
 echo "  ─────────────────────────────────────"
 echo "  Per trade:      \$5 max"
 echo "  Portfolio cap:  \$15 max exposure"
@@ -184,10 +184,9 @@ echo "════════════════════════�
 cleanup() { kill $P1 $P2 $P3 2>/dev/null; echo "Stopped."; exit 0; }
 trap cleanup INT TERM
 
-# Launch dashboard (foreground)
+# Stream all logs to terminal
 echo ""
-echo "  Opening Dashboard..."
-echo ""
-sleep 3
-trap "kill $P1 $P2 $P3 2>/dev/null; exit 0" INT TERM
-node "$DIR/dashboard.js"
+tail -f "$DIR/logs/copybot.log" "$DIR/logs/signal.log" "$DIR/logs/autobot.log" 2>/dev/null &
+TAIL_PID=$!
+trap "kill $P1 $P2 $P3 $TAIL_PID 2>/dev/null; exit 0" INT TERM
+wait
