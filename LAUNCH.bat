@@ -270,9 +270,10 @@ if exist "D:\Lance\Desktop" set "SC_DESKTOP=D:\Lance\Desktop"
 if not "!SC_DESKTOP!"=="" (
     echo @echo off> "!SC_DESKTOP!\Polymarket Bots.bat"
     echo cd /d "!DIR!">> "!SC_DESKTOP!\Polymarket Bots.bat"
-    echo call LAUNCH.bat>> "!SC_DESKTOP!\Polymarket Bots.bat"
+    echo call START.bat>> "!SC_DESKTOP!\Polymarket Bots.bat"
     if exist "!SC_DESKTOP!\Polymarket Bots.bat" (
         echo   [ok] Desktop shortcut: "Polymarket Bots.bat"
+        echo        Double-click it next time — no setup needed.
     )
 )
 
@@ -280,13 +281,19 @@ if not "!SC_DESKTOP!"=="" (
 ::  STEP 9: Open Dashboard
 :: ═══════════════════════════════════════════════════════
 echo.
-echo   ═══════════════════════════════════════════════════
-echo     Dashboard: http://localhost:3847
-echo     Keep this window open. Ctrl+C to stop.
-echo   ═══════════════════════════════════════════════════
+echo   ╔══════════════════════════════════════════════════════╗
+echo   ║                                                      ║
+echo   ║   DASHBOARD:  http://localhost:3847                  ║
+echo   ║                                                      ║
+echo   ║   If your browser didn't open, copy the URL above   ║
+echo   ║   and paste it into Chrome / Edge / Firefox.         ║
+echo   ║                                                      ║
+echo   ║   Keep this window open. Press Ctrl+C to stop.       ║
+echo   ║                                                      ║
+echo   ╚══════════════════════════════════════════════════════╝
 echo.
 
-timeout /t 2 /nobreak >nul
+timeout /t 1 /nobreak >nul
 title Polymarket Dashboard
 
 :: Restart loop — dashboard exits on auto-update, then comes back

@@ -8,11 +8,33 @@ import http from "node:http";
 import { readFileSync, existsSync, statSync, createWriteStream, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { exec, spawn } from "node:child_process";
-import { ethers } from "ethers";
+import { exec, execSync, spawn } from "node:child_process";
 
-const PORT = 3847;
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const PORT = 3847;
+
+// ── Preflight: ensure dependencies are installed ──
+let ethers;
+try {
+  ethers = await import("ethers");
+  ethers = ethers.ethers || ethers.default || ethers;
+} catch {
+  console.log("");
+  console.log("  [ERROR] Dependencies not installed. Running npm install...");
+  console.log("");
+  try {
+    execSync("npm install", { cwd: ROOT, stdio: "inherit" });
+    const mod = await import("ethers");
+    ethers = mod.ethers || mod.default || mod;
+  } catch (e) {
+    console.log("");
+    console.log("  [FATAL] Could not install dependencies.");
+    console.log("  Try running manually:  cd " + ROOT + " && npm install");
+    console.log("  Error: " + e.message);
+    console.log("");
+    process.exit(1);
+  }
+}
 
 // ── Paths ──
 const COPYBOT_STATE = path.join(ROOT, "state.json");
@@ -622,8 +644,13 @@ server.on("error", (err) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`\n  Dashboard running at: http://localhost:${PORT}`);
+server.listen(PORT, "127.0.0.1", () => {
+  console.log("");
+  console.log("  ╔══════════════════════════════════════════════════════╗");
+  console.log(`  ║   DASHBOARD READY: http://localhost:${PORT}            ║`);
+  console.log("  ║   Open that URL in your browser if it didn't open.  ║");
+  console.log("  ╚══════════════════════════════════════════════════════╝");
+  console.log("");
 
   // Spawn all bots as child processes
   console.log("  Starting bots...");
@@ -634,9 +661,13 @@ server.listen(PORT, () => {
   checkForUpdates();
   setInterval(checkForUpdates, 60000);
 
-  // Auto-open browser
-  const cmd = process.platform === "win32" ? "start" : process.platform === "darwin" ? "open" : "xdg-open";
-  exec(`${cmd} http://localhost:${PORT}`);
+  // Auto-open browser (start "" "url" needed on Windows — empty quotes are the window title)
+  if (process.platform === "win32") {
+    exec(`start "" "http://localhost:${PORT}"`);
+  } else {
+    const cmd = process.platform === "darwin" ? "open" : "xdg-open";
+    exec(`${cmd} http://localhost:${PORT}`);
+  }
 });
 
 // Clean shutdown — close server + kill bot children on exit

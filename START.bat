@@ -54,10 +54,16 @@ if not errorlevel 1 (
 )
 
 echo.
-echo   ═══════════════════════════════════════════════════
-echo     Dashboard: http://localhost:3847
-echo     Keep this window open. Ctrl+C to stop.
-echo   ═══════════════════════════════════════════════════
+echo   ╔══════════════════════════════════════════════════════╗
+echo   ║                                                      ║
+echo   ║   DASHBOARD:  http://localhost:3847                  ║
+echo   ║                                                      ║
+echo   ║   If your browser didn't open, copy the URL above   ║
+echo   ║   and paste it into Chrome / Edge / Firefox.         ║
+echo   ║                                                      ║
+echo   ║   Keep this window open. Press Ctrl+C to stop.       ║
+echo   ║                                                      ║
+echo   ╚══════════════════════════════════════════════════════╝
 echo.
 
 :: ── Launch dashboard (it spawns + manages all 3 bots) ──
