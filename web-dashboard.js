@@ -396,7 +396,7 @@ const HTML = `<!DOCTYPE html>
       <div class="sg-item"><div class="sg-val">3</div><div class="sg-label">Max Positions</div></div>
       <div class="sg-item"><div class="sg-val">$10/d</div><div class="sg-label">Daily Cap</div></div>
       <div class="sg-item"><div class="sg-val">5c</div><div class="sg-label">Max Spread</div></div>
-      <div class="sg-item"><div class="sg-val">12%</div><div class="sg-label">Min Edge (Auto)</div></div>
+      <div class="sg-item"><div class="sg-val">5%</div><div class="sg-label">Min Edge (Auto)</div></div>
     </div>
   </div>
 

@@ -157,7 +157,7 @@ echo MAX_PORTFOLIO_USDC=15
 echo MAX_POSITIONS=3
 echo MAX_DAILY_USDC=10
 echo MAX_SPREAD_CENTS=5
-echo MAX_NEW_PER_CYCLE=1
+echo MAX_NEW_PER_CYCLE=2
 echo POLL_INTERVAL_S=30
 ) > "!DIR!\copybot\.env"
 
@@ -169,9 +169,9 @@ echo MAX_PORTFOLIO_USDC=15
 echo MAX_POSITIONS=3
 echo MAX_DAILY_USDC=10
 echo MAX_SPREAD_CENTS=5
-echo SCAN_INTERVAL_S=60
-echo MIN_EDGE=0.12
-echo MIN_LIQUIDITY=5000
+echo SCAN_INTERVAL_S=45
+echo MIN_EDGE=0.05
+echo MIN_LIQUIDITY=3000
 ) > "!DIR!\autobot\.env"
 
 echo   [ok] Config written
@@ -230,7 +230,7 @@ echo   Signal:  0x5eD48e29dcd952955d7E4fccC3616EFA38cD75a5
 echo   Copy:    0xf35803f093BBceaBEb9A6abd3d4c99856BDdA40C
 echo   Auto:    0xf17Cb352380Fd5503742c5A0573cDE4c656d8486
 echo.
-echo   Safeguards: $5/trade ^| $15 cap ^| 3 positions ^| $10/day ^| 5c spread
+echo   Safeguards: $5/trade ^| $15 cap ^| 3 positions ^| $10/day ^| 5c spread ^| 5%% edge
 echo.
 
 :: ═══════════════════════════════════════════════════════

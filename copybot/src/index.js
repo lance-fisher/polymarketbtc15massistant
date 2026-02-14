@@ -147,20 +147,6 @@ async function main() {
   const copiedKeys = new Set(Object.keys(state.copied));
   let totalProfit = state.pnl.reduce((s, e) => s + e.profit, 0);
 
-  // ── First-run catch-up protection ──
-  let baselineKeys = new Set();
-  if (copiedKeys.size === 0) {
-    try {
-      const existing = await fetchPositions(targetAddr);
-      for (const p of existing) {
-        baselineKeys.add(p.conditionId + "_" + p.asset);
-      }
-      log("init", `Baseline: ${baselineKeys.size} existing positions (will NOT auto-copy these)`);
-    } catch (e) {
-      log("warn", `Could not fetch baseline: ${e.message}`);
-    }
-  }
-
   log("init", `Loaded ${copiedKeys.size} copied positions, P&L: $${totalProfit.toFixed(2)}`);
   log("init", `Limits: $${CFG.maxTradeUsdc}/trade | $${CFG.maxPortfolioUsdc} portfolio cap | ${CFG.maxPositions} max positions | $${CFG.maxDailyUsdc}/day`);
   console.log("─".repeat(52));
@@ -196,10 +182,6 @@ async function main() {
         const title = pos.title || pos.slug || pos.conditionId.slice(0, 12);
         const outcome = pos.outcome || "?";
 
-        if (baselineKeys.has(key)) {
-          log("skip", `${title} (${outcome}) – pre-existing position (catch-up protection)`);
-          continue;
-        }
         if (newThisCycle >= CFG.maxNewPerCycle) {
           log("skip", `${title} – max ${CFG.maxNewPerCycle} new entries per cycle reached`);
           break;

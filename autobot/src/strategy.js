@@ -78,24 +78,25 @@ export function scoreOutcome(market, outcome) {
   }
 
   // ── Edge calculation ──
-  // Our "fair value" model: extreme prices revert toward center.
-  // For very cheap outcomes (<20¢), estimate fair value as price + contrarian_edge.
-  // This is a simple model — real edge comes from the scoring factors above.
+  // Fair value model: extreme prices revert toward center.
+  // Wider bands to catch more opportunities while staying safe.
   let fairValue;
   if (price <= 0.10) {
-    fairValue = price + 0.08;   // cheap outcomes are ~8% undervalued
+    fairValue = price + 0.10;   // very cheap = likely undervalued 10%+
   } else if (price <= 0.20) {
-    fairValue = price + 0.06;
-  } else if (price <= 0.30) {
-    fairValue = price + 0.04;
+    fairValue = price + 0.08;   // cheap outcomes ~8% undervalued
+  } else if (price <= 0.35) {
+    fairValue = price + 0.05;   // moderate underpricing
   } else if (price >= 0.85) {
-    fairValue = price - 0.04;   // expensive outcomes overvalued
+    fairValue = price - 0.05;   // expensive = buy the other side
+  } else if (price >= 0.70) {
+    fairValue = price - 0.03;
   } else {
     fairValue = price;          // fair-priced, no edge
   }
 
   const edge = fairValue - price;
-  if (edge < CFG.minEdge && score < 4) return null;  // not enough edge
+  if (edge < CFG.minEdge && score < 3) return null;  // need edge OR strong score
 
   // ── Risk assessment ──
   // Potential return: if we buy at `price` and it resolves YES → profit = (1 - price)
