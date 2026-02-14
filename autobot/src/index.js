@@ -180,8 +180,8 @@ async function main() {
                 console.log(`[trade] Skip "${(opp.market.question || "").slice(0, 40)}" — spread ${spreadCents}c > ${CFG.maxSpreadCents}c`);
                 continue;
               }
-              // Use bestAsk + 2c buffer so FOK sweeps multiple price levels
-              buyPrice = Math.min(book.bestAsk + 0.02, 0.99);
+              // Use bestAsk + 3c buffer so FOK sweeps multiple price levels
+              buyPrice = Math.min(book.bestAsk + 0.03, 0.99);
             }
           } catch { /* book fetch failed, use Gamma price */ }
 
@@ -192,7 +192,7 @@ async function main() {
           console.log(`[trade]     "${(opp.market.question || "").slice(0, 60)}"`);
           console.log(`[trade]     edge:${(opp.edge * 100).toFixed(1)}% | R/R:${opp.rrRatio}x | reasons:[${opp.reasons.join(",")}]`);
 
-          const result = await placeBuyOrder({
+          let result = await placeBuyOrder({
             wallet, creds,
             tokenId: opp.tokenId,
             price: buyPrice,
@@ -205,6 +205,19 @@ async function main() {
             console.log("[auth] API key expired — re-deriving…");
             try { creds = await deriveApiKey(wallet); console.log("[auth] New API key derived"); } catch (e) { console.log(`[auth] Re-derive failed: ${e.message}`); }
             break;
+          }
+
+          // FOK failed — retry as GTC (resting order)
+          if (!result.success && !result.orderID) {
+            console.log("[trade] FOK failed — retrying as GTC…");
+            result = await placeBuyOrder({
+              wallet, creds,
+              tokenId: opp.tokenId,
+              price: buyPrice,
+              usdcAmount: usdcToSpend,
+              negRisk: opp.market.negRisk,
+              orderType: "GTC",
+            });
           }
 
           if (result.success || result.orderID) {

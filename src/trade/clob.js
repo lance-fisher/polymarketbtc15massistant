@@ -113,7 +113,7 @@ function roundDown(v, dec = 6) {
 /**
  * Build, sign, and post a BUY order to the CLOB.
  */
-export async function placeBuyOrder({ wallet, creds, clobUrl, tokenId, price, usdcAmount, negRisk = false }) {
+export async function placeBuyOrder({ wallet, creds, clobUrl, tokenId, price, usdcAmount, negRisk = false, orderType = "FOK" }) {
   const salt = BigInt("0x" + randomBytes(32).toString("hex"));
   const makerAmt = BigInt(Math.round(roundDown(usdcAmount, 6) * 1e6));
   const takerAmt = BigInt(Math.round(roundDown(usdcAmount / price, 6) * 1e6));
@@ -152,7 +152,7 @@ export async function placeBuyOrder({ wallet, creds, clobUrl, tokenId, price, us
       signature,
     },
     owner:     wallet.address,
-    orderType: "FOK",
+    orderType,
   });
 
   const path = "/order";

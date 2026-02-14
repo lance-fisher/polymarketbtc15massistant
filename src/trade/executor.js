@@ -37,7 +37,7 @@ export class Executor {
     this.totalPnl    = 0;
     this.dailySpent  = 0;
     this.dailyResetDate = "";
-    this.maxDailyUsdc = Number(process.env.MAX_DAILY_USDC) || 10;
+    this.maxDailyUsdc = Number(process.env.MAX_DAILY_USDC) || 30;
     this.maxSpreadCents = Number(process.env.MAX_SPREAD_CENTS) || 8;
   }
 
@@ -187,11 +187,11 @@ export class Executor {
       }
       // Use actual bestAsk + 2c buffer for FOK fill reliability
       if (summary.bestAsk != null) {
-        price = Math.min(summary.bestAsk + 0.02, 0.99);
+        price = Math.min(summary.bestAsk + 0.03, 0.99);
       }
     } catch {
       // If we can't check spread, proceed with market price + buffer
-      price = Math.min(price + 0.02, 0.99);
+      price = Math.min(price + 0.03, 0.99);
     }
 
     const negRisk = poly.market?.negRisk === true || poly.market?.negRisk === "true";
@@ -200,7 +200,7 @@ export class Executor {
     console.log(`\n[trade] >>> BUY ${side} @ ${(price * 100).toFixed(0)}c for $${usdcToSpend.toFixed(2)}`);
 
     try {
-      const result = await placeBuyOrder({
+      let result = await placeBuyOrder({
         wallet: this.wallet,
         creds:  this.creds,
         clobUrl: CLOB_URL,
@@ -215,6 +215,21 @@ export class Executor {
         console.log("[trade] API key expired — re-deriving…");
         try { this.creds = await deriveApiKey(this.wallet, CLOB_URL); console.log("[trade] New API key derived"); } catch (e) { console.log(`[trade] Re-derive failed: ${e.message}`); }
         return;
+      }
+
+      // FOK failed — retry as GTC (resting order)
+      if (!result.success && !result.orderID) {
+        console.log("[trade] FOK failed — retrying as GTC…");
+        result = await placeBuyOrder({
+          wallet: this.wallet,
+          creds:  this.creds,
+          clobUrl: CLOB_URL,
+          tokenId,
+          price,
+          usdcAmount: usdcToSpend,
+          negRisk,
+          orderType: "GTC",
+        });
       }
 
       if (result.success || result.orderID) {

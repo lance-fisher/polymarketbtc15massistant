@@ -20,11 +20,11 @@ export const CFG = {
   maxTradeUsdc:     Number(e.MAX_TRADE_USDC) || 5,
   maxPortfolioUsdc: Number(e.MAX_PORTFOLIO_USDC) || 15,
   maxPositions:     Number(e.MAX_POSITIONS) || 3,
-  maxDailyUsdc:     Number(e.MAX_DAILY_USDC) || 10,
+  maxDailyUsdc:     Number(e.MAX_DAILY_USDC) || 20,
   maxSpreadCents:   Number(e.MAX_SPREAD_CENTS) || 8,
-  scanIntervalS:    Number(e.SCAN_INTERVAL_S) || 45,
-  minEdge:          0.03,       // hardcoded — 3% min edge for autonomous trades
-  minLiquidity:     3000,       // hardcoded — auto-update safe
+  scanIntervalS:    Number(e.SCAN_INTERVAL_S) || 30,
+  minEdge:          Number(e.MIN_EDGE) || 0.03,
+  minLiquidity:     Number(e.MIN_LIQUIDITY) || 1500,
 
   gammaUrl:  "https://gamma-api.polymarket.com",
   dataUrl:   "https://data-api.polymarket.com",

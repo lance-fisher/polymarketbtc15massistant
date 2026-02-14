@@ -188,12 +188,12 @@ export async function getBookPrice(tokenId, side = "BUY") {
     const asks = book.asks || [];
     if (!asks.length) return null;
     const bestAsk = Math.min(...asks.map((a) => Number(a.price)));
-    // Add 2c buffer above bestAsk so FOK sweeps multiple price levels
-    return Math.min(bestAsk + 0.02, 0.99);
+    // Add 3c buffer above bestAsk so FOK sweeps multiple price levels
+    return Math.min(bestAsk + 0.03, 0.99);
   }
   const bids = book.bids || [];
   if (!bids.length) return null;
   const bestBid = Math.max(...bids.map((b) => Number(b.price)));
-  // Subtract 2c below bestBid so FOK sell actually fills
-  return Math.max(bestBid - 0.02, 0.01);
+  // Subtract 3c below bestBid so FOK sell actually fills
+  return Math.max(bestBid - 0.03, 0.01);
 }

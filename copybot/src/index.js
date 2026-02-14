@@ -220,7 +220,7 @@ async function main() {
 
         log("copy", `BUY ${outcome} on "${title}" @ ${(buyPrice * 100).toFixed(0)}¢ for $${usdcToSpend.toFixed(2)} (spread: ${spreadCents}¢)`);
 
-        const result = await placeOrder({
+        let result = await placeOrder({
           wallet, creds,
           side: "BUY",
           tokenId: pos.asset,
@@ -234,6 +234,20 @@ async function main() {
           log("auth", "API key expired — re-deriving…");
           try { creds = await deriveApiKey(wallet); log("auth", "New API key derived"); } catch (e) { log("auth", `Re-derive failed: ${e.message}`); }
           break;
+        }
+
+        // FOK failed — retry as GTC (resting order that fills when liquidity appears)
+        if (!result.success && !result.orderID) {
+          log("retry", `FOK failed for ${title} — retrying as GTC…`);
+          result = await placeOrder({
+            wallet, creds,
+            side: "BUY",
+            tokenId: pos.asset,
+            price: buyPrice,
+            amount: usdcToSpend,
+            negRisk,
+            orderType: "GTC",
+          });
         }
 
         if (result.success || result.orderID) {

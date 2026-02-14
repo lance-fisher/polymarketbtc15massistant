@@ -60,7 +60,7 @@ function orderDomain(negRisk) {
 
 function rd(v, d = 6) { const f = 10 ** d; return Math.floor(v * f) / f; }
 
-export async function placeBuyOrder({ wallet, creds, tokenId, price, usdcAmount, negRisk = false }) {
+export async function placeBuyOrder({ wallet, creds, tokenId, price, usdcAmount, negRisk = false, orderType = "FOK" }) {
   const salt = BigInt("0x" + randomBytes(32).toString("hex"));
   const order = {
     salt, maker: wallet.address, signer: wallet.address,
@@ -76,7 +76,7 @@ export async function placeBuyOrder({ wallet, creds, tokenId, price, usdcAmount,
       taker: order.taker, tokenId: order.tokenId.toString(),
       makerAmount: order.makerAmount.toString(), takerAmount: order.takerAmount.toString(),
       expiration: "0", nonce: "0", feeRateBps: "200", side: BUY, signatureType: 0, signature },
-    owner: wallet.address, orderType: "FOK",
+    owner: wallet.address, orderType,
   });
   const path = "/order";
   const res = await fetch(CFG.clobUrl + path, { method: "POST", headers: l2Headers(creds, wallet, "POST", path, body), body, signal: AbortSignal.timeout(30000) });
