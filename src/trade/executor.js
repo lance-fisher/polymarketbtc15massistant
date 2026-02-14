@@ -53,6 +53,18 @@ export class Executor {
     }
   }
 
+  _expireStalePosition() {
+    if (!this.position) return;
+    const ageMs = Date.now() - this.position.ts;
+    // Auto-clear positions older than 20 minutes (15m window + 5m buffer)
+    if (ageMs > 20 * 60 * 1000) {
+      console.log(`[trade] Position expired (${Math.round(ageMs / 60000)}min old) — clearing for new trades`);
+      this.history.push({ ...this.position, resolvedAt: Date.now() });
+      this.position = null;
+      this.currentSlug = null;
+    }
+  }
+
   /**
    * Check and set USDC + CTF approvals for all exchange contracts.
    * Only sends transactions if approvals are missing.
@@ -156,6 +168,11 @@ export class Executor {
 
   async onSignal(rec, poly) {
     if (!this.enabled) return;
+
+    // Always reset daily cap + clear stale positions (even if no signal)
+    this._resetDailyIfNeeded();
+    this._expireStalePosition();
+
     if (rec.action !== "ENTER" || !poly?.ok) return;
 
     const slug = poly.market?.slug ?? "";
@@ -163,9 +180,6 @@ export class Executor {
 
     // Don't re-enter the same market
     if (this.currentSlug === slug) return;
-
-    // ── Guard: daily cap ──
-    this._resetDailyIfNeeded();
     if (this.dailySpent + this.maxUsdc > this.maxDailyUsdc) {
       return; // silently skip — status line will show
     }
@@ -210,11 +224,25 @@ export class Executor {
         negRisk,
       });
 
-      // Auto-refresh API key on auth failure
+      // Auto-refresh API key on auth failure and retry
       if (result.status === 401 || result.status === 403 || (result.errorMsg || "").includes("auth")) {
         console.log("[trade] API key expired — re-deriving…");
-        try { this.creds = await deriveApiKey(this.wallet, CLOB_URL); console.log("[trade] New API key derived"); } catch (e) { console.log(`[trade] Re-derive failed: ${e.message}`); }
-        return;
+        try {
+          this.creds = await deriveApiKey(this.wallet, CLOB_URL);
+          console.log("[trade] New API key derived — retrying order…");
+          result = await placeBuyOrder({
+            wallet: this.wallet,
+            creds:  this.creds,
+            clobUrl: CLOB_URL,
+            tokenId,
+            price,
+            usdcAmount: usdcToSpend,
+            negRisk,
+          });
+        } catch (e) {
+          console.log(`[trade] Re-derive failed: ${e.message}`);
+          return;
+        }
       }
 
       // FOK failed — retry as GTC (resting order)
@@ -247,9 +275,9 @@ export class Executor {
   }
 
   onMarketRotate(newSlug) {
-    if (!this.position || this.position.slug === newSlug) return;
+    if (!this.position) return;
     const p = this.position;
-    console.log(`\n[trade] Market resolved: ${p.slug} (held ${p.side} ${p.shares.toFixed(1)} shares @ ${(p.price * 100).toFixed(0)}c)`);
+    console.log(`\n[trade] Market rotated → ${newSlug} (held ${p.side} ${p.shares.toFixed(1)} shares @ ${(p.price * 100).toFixed(0)}c on ${p.slug})`);
     this.history.push({ ...p, resolvedAt: Date.now() });
     this.position = null;
     this.currentSlug = null;

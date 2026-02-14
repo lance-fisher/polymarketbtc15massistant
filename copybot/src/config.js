@@ -25,7 +25,7 @@ export const CFG = {
   maxPositions:    Number(e.MAX_POSITIONS) || 3,
   maxDailyUsdc:    Number(e.MAX_DAILY_USDC) || 20,
   maxSpreadCents:  Number(e.MAX_SPREAD_CENTS) || 8,
-  maxNewPerCycle:  3,          // hardcoded — enter multiple positions per cycle
+  maxNewPerCycle:  Number(e.MAX_NEW_PER_CYCLE) || 3,
   pollIntervalS:   Number(e.POLL_INTERVAL_S) || 20,
 
   twilio: {

@@ -520,10 +520,12 @@ async function main() {
 
       // ── Auto-trade execution ──
       const curSlug = poly.ok ? (poly.market?.slug ?? "") : "";
+      // Detect market rotation: slug changed OR condition ID changed
       if (prevMarketSlug && curSlug && curSlug !== prevMarketSlug) {
         executor.onMarketRotate(curSlug);
       }
-      prevMarketSlug = curSlug;
+      // Don't clobber prevMarketSlug when API is temporarily down
+      if (curSlug) prevMarketSlug = curSlug;
       await executor.onSignal(rec, poly);
 
       const vwapSlopeLabel = vwapSlope === null ? "-" : vwapSlope > 0 ? "UP" : vwapSlope < 0 ? "DOWN" : "FLAT";

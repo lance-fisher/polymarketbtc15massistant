@@ -200,11 +200,23 @@ async function main() {
             negRisk: opp.market.negRisk,
           });
 
-          // Auto-refresh API key on auth failure
+          // Auto-refresh API key on auth failure and retry
           if (result.status === 401 || result.status === 403 || (result.errorMsg || "").includes("auth")) {
             console.log("[auth] API key expired — re-deriving…");
-            try { creds = await deriveApiKey(wallet); console.log("[auth] New API key derived"); } catch (e) { console.log(`[auth] Re-derive failed: ${e.message}`); }
-            break;
+            try {
+              creds = await deriveApiKey(wallet);
+              console.log("[auth] New API key derived — retrying order…");
+              result = await placeBuyOrder({
+                wallet, creds,
+                tokenId: opp.tokenId,
+                price: buyPrice,
+                usdcAmount: usdcToSpend,
+                negRisk: opp.market.negRisk,
+              });
+            } catch (e) {
+              console.log(`[auth] Re-derive failed: ${e.message}`);
+              break;
+            }
           }
 
           // FOK failed — retry as GTC (resting order)
