@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat D:/ProjectsHome/trading-shared/TRADING_CONTEXT.md D:/ProjectsHome/trading-shared/WALLET_REGISTRY.md 2>/dev/null || echo 'Trading shared context not found.'"
+          }
+        ]
+      }
+    ]
+  }
+}
