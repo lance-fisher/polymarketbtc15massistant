@@ -8,3 +8,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 state.json
+
+# Standard entries
+.claude/
+__pycache__/
+*.pid
