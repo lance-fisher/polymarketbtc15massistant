@@ -1,6 +1,7 @@
 const e = process.env;
 
 export const CFG = {
+  dryRun:          (e.DRY_RUN ?? "true").toLowerCase() !== "false",
   privateKey:      e.PRIVATE_KEY || "",
   polygonRpc:      e.POLYGON_RPC_URL || "https://polygon-rpc.com",
 

@@ -109,6 +109,13 @@ async function main() {
   let totalProfit = state.pnl.reduce((s, e) => s + e.profit, 0);
 
   log("init", `Loaded ${copiedKeys.size} copied positions, cumulative P&L: $${totalProfit.toFixed(2)}`);
+  if (CFG.dryRun) {
+    log("SAFETY", "DRY_RUN=true -- orders will be SIMULATED, no real trades placed");
+    log("SAFETY", "Set DRY_RUN=false in .env to enable live trading");
+  } else {
+    log("LIVE", "WARNING: DRY_RUN=false -- REAL ORDERS will be placed with REAL USDC");
+    log("LIVE", "WARNING: Trades will execute on Polygon mainnet using your wallet");
+  }
   log("run", `Polling every ${CFG.pollIntervalS}s | Max per trade: $${CFG.maxTradeUsdc}`);
   console.log("─".repeat(52));
 
@@ -146,14 +153,20 @@ async function main() {
 
         log("copy", `BUY ${outcome} on "${title}" @ $${price.toFixed(2)} for $${usdcToSpend.toFixed(2)}`);
 
-        const result = await placeOrder({
-          wallet, creds,
-          side: "BUY",
-          tokenId: pos.asset,
-          price,
-          amount: usdcToSpend,
-          negRisk,
-        });
+        let result;
+        if (CFG.dryRun) {
+          log("DRY RUN", `Would execute: BUY ${shares.toFixed(2)} shares of "${title}" (${outcome}) @ $${price.toFixed(4)} for $${usdcToSpend.toFixed(2)} USDC | negRisk=${negRisk}`);
+          result = { success: true, orderID: "DRY_RUN" };
+        } else {
+          result = await placeOrder({
+            wallet, creds,
+            side: "BUY",
+            tokenId: pos.asset,
+            price,
+            amount: usdcToSpend,
+            negRisk,
+          });
+        }
 
         if (result.success || result.orderID) {
           log("fill", `Order ${result.orderID || "ok"} – ${title} (${outcome})`);
@@ -189,14 +202,20 @@ async function main() {
 
         log("exit", `SELL ${entry.outcome} on "${entry.title}" @ $${price.toFixed(2)}`);
 
-        const result = await placeOrder({
-          wallet, creds,
-          side: "SELL",
-          tokenId: entry.tokenId,
-          price,
-          amount: entry.shares,
-          negRisk: entry.negRisk ?? false,
-        });
+        let result;
+        if (CFG.dryRun) {
+          log("DRY RUN", `Would execute: SELL ${entry.shares.toFixed(2)} shares of "${entry.title}" (${entry.outcome}) @ $${price.toFixed(4)} | negRisk=${entry.negRisk ?? false}`);
+          result = { success: true, orderID: "DRY_RUN" };
+        } else {
+          result = await placeOrder({
+            wallet, creds,
+            side: "SELL",
+            tokenId: entry.tokenId,
+            price,
+            amount: entry.shares,
+            negRisk: entry.negRisk ?? false,
+          });
+        }
 
         const revenue = entry.shares * price;
         const profit  = revenue - entry.costUsdc;

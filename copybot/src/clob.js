@@ -1,6 +1,20 @@
 import { randomBytes, createHmac } from "node:crypto";
 import { CFG } from "./config.js";
 
+/**
+ * Safety gate: prevents any order from reaching the CLOB when DRY_RUN is active.
+ * This is a belt-and-suspenders guard — callers should also check CFG.dryRun,
+ * but if any code path calls placeOrder() without checking, this stops it.
+ */
+function assertNotDryRun(side, tokenId, amount) {
+  if (CFG.dryRun) {
+    const msg = `[DRY RUN] BLOCKED: ${side} tokenId=${tokenId} amount=${amount} — placeOrder() called while DRY_RUN=true`;
+    console.error(msg);
+    return { success: false, orderID: "DRY_RUN_BLOCKED", errorMsg: msg };
+  }
+  return null;
+}
+
 const BUY = 0, SELL = 1;
 
 /* ─── L1 Auth: EIP-712 ClobAuth → derive API key ──────────── */
@@ -106,6 +120,10 @@ function roundDown(v, dec = 6) {
  * @param {string}  [p.orderType="FOK"]
  */
 export async function placeOrder({ wallet, creds, side, tokenId, price, amount, negRisk, orderType = "FOK" }) {
+  // Belt-and-suspenders: block order submission if DRY_RUN is active
+  const dryBlock = assertNotDryRun(side, tokenId, amount);
+  if (dryBlock) return dryBlock;
+
   const isBuy = side === "BUY";
   const sideInt = isBuy ? BUY : SELL;
   const salt = BigInt("0x" + randomBytes(32).toString("hex"));
